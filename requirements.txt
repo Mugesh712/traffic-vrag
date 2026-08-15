@@ -9,3 +9,4 @@ supervision>=0.29,<0.30
 torchreid>=0.2.5
 gdown>=5.2
 tensorboard>=2.20
+pytest>=8.0

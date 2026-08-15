@@ -49,10 +49,20 @@ class TrackConfig(BaseModel):
     embedding_top_k: int = 5
 
 
+class AssociationScoreWeights(BaseModel):
+    appearance: float = 0.5
+    motion: float = 0.3
+    temporal: float = 0.2
+
+
 class AssociationConfig(BaseModel):
     appearance_similarity_threshold: float = 0.7
-    max_gap_frames: int = 30
+    max_gap_sec: float = 3.0
     stationary_variance_threshold: float = 5.0
+    stationary_iou_threshold: float = 0.3
+    motion_tolerance: float = 2.5
+    velocity_window: int = 3
+    score_weights: AssociationScoreWeights = AssociationScoreWeights()
 
 
 class VLMConfig(BaseModel):

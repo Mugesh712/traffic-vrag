@@ -20,7 +20,8 @@ import supervision as sv
 
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
-from src.utils.schemas import ClipDetections, ClipTracks, Track, TrafficClass, VideoManifest
+from src.utils.manifest import load_clip_frame_index
+from src.utils.schemas import ClipDetections, ClipTracks, Track, TrafficClass
 
 logger = get_logger(__name__)
 
@@ -59,24 +60,6 @@ def _extract_embeddings(extractor, crops_bgr: list[np.ndarray]) -> np.ndarray:
     rgb_crops = [cv2.cvtColor(c, cv2.COLOR_BGR2RGB) for c in crops_bgr]
     feats = extractor(rgb_crops)
     return feats.cpu().numpy() if hasattr(feats, "cpu") else np.asarray(feats)
-
-
-def _load_video_manifest_for_clip(
-    clip_id: str, settings: PipelineSettings
-) -> tuple[dict[str, str], dict[str, float]]:
-    """Find the VideoManifest containing `clip_id` and return
-    (frame_id -> frame_path, frame_id -> video_timestamp_sec)."""
-    ingest_dir = settings.resolve_path(settings.paths.outputs_dir) / "ingest"
-    for manifest_path in sorted(ingest_dir.glob("*_manifest.json")):
-        manifest = VideoManifest.model_validate_json(manifest_path.read_text())
-        for clip in manifest.clips:
-            if clip.clip_id == clip_id:
-                paths = {f.frame_id: f.frame_path for f in clip.frames}
-                timestamps = {f.frame_id: f.video_timestamp_sec for f in clip.frames}
-                return paths, timestamps
-    raise TrackerError(
-        f"No ingest manifest under {ingest_dir} contains clip_id={clip_id}; run `ingest` first."
-    )
 
 
 def _crop(image: np.ndarray, bbox: tuple[float, float, float, float]) -> np.ndarray:
@@ -183,6 +166,7 @@ class _TrackAccumulator:
             dominant_direction_deg=dominant_direction_deg,
             embedding=embedding,
             best_shot_crops=[path for _, path in self._best_crops],
+            best_shot_scores=[score for score, _ in self._best_crops],
         )
 
 
@@ -194,7 +178,7 @@ def track_clip(clip_id: str, settings: PipelineSettings | None = None) -> ClipTr
         raise TrackerError(f"No detections found for {clip_id} at {detections_path}; run `detect` first.")
     clip_detections = ClipDetections.model_validate_json(detections_path.read_text())
 
-    frame_paths, frame_timestamps = _load_video_manifest_for_clip(clip_id, settings)
+    frame_paths, frame_timestamps = load_clip_frame_index(clip_id, settings)
 
     detections_by_frame: dict[str, list] = defaultdict(list)
     for det in clip_detections.detections:

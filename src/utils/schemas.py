@@ -83,6 +83,7 @@ class Track(BaseModel):
     dominant_direction_deg: Optional[float] = None  # atan2(dy, dx) of net displacement, image coords
     embedding: list[float] = Field(default_factory=list)  # rolling-average OSNet embedding, L2-normalized
     best_shot_crops: list[str] = Field(default_factory=list)  # paths, highest quality first
+    best_shot_scores: list[float] = Field(default_factory=list)  # aligned with best_shot_crops
 
     model_config = {"populate_by_name": True}
 
@@ -98,8 +99,23 @@ class ClipTracks(BaseModel):
 
 
 class MergeLogEntry(BaseModel):
-    merged_track_ids: list[str]
-    into_track_id: str
+    """One accepted fragment link (from_track_id -> to_track_id), with the
+    score every gate produced. Per-link rather than per-component so ablations
+    can attribute each repair to its evidence."""
+
+    merged_track_ids: list[str]  # [from_track_id, to_track_id]
+    into_track_id: str  # surviving id of the component both ended up in
+    gate_scores: dict[str, float]
+
+
+class RejectedLinkEntry(BaseModel):
+    """A temporally plausible pair that did not become a merge. Only pairs
+    passing the temporal gate are logged — logging every O(n^2) pair would swamp
+    the file with trivially distant ones."""
+
+    from_track_id: str
+    to_track_id: str
+    failed_gate: str  # first gate to fail, under the documented gate order
     gate_scores: dict[str, float]
 
 
@@ -107,6 +123,12 @@ class ClipAssociatedTracks(BaseModel):
     clip_id: str
     tracks: list[Track] = Field(default_factory=list)
     merge_log: list[MergeLogEntry] = Field(default_factory=list)
+    # Failed a hard gate.
+    rejected_links: list[RejectedLinkEntry] = Field(default_factory=list)
+    # Passed every gate but lost a contested endpoint to a higher-scoring link
+    # (failed_gate == "assignment_conflict"). Kept separate from rejected_links
+    # so ablations can tell "the gates rejected it" from "the matcher did".
+    suppressed_links: list[RejectedLinkEntry] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

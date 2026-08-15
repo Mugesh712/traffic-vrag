@@ -80,6 +80,21 @@ def track(
 
 
 @app.command()
+def associate(
+    clip_id: str = typer.Argument(..., help="Clip ID to repair fragmented tracks for."),
+) -> None:
+    """Repair intra-clip track fragmentation with gated association (M4)."""
+    from src.perception.association import associate_clip
+
+    settings = get_settings()
+    associated = associate_clip(clip_id, settings=settings)
+    typer.echo(
+        f"Associated {clip_id}: {len(associated.tracks)} tracks "
+        f"after {len(associated.merge_log)} merges"
+    )
+
+
+@app.command()
 def attribute(
     clip_id: str = typer.Argument(..., help="Clip ID to extract attributes for."),
 ) -> None:

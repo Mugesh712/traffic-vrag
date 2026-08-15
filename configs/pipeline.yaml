@@ -38,9 +38,21 @@ track:
   embedding_top_k: 5
 
 association:
+  # M4 hard gates. All must hold for a fragment link to be accepted.
+  # tau_app: min ReID cosine similarity. NOTE: needs calibration on real
+  # footage — ImageNet-pretrained OSNet scores ~0.72 even between visually
+  # distinct objects, so 0.7 is close to the noise floor. Sweep it in M16.
   appearance_similarity_threshold: 0.7
-  max_gap_frames: 30
-  stationary_variance_threshold: 5.0
+  max_gap_sec: 3.0                       # temporal gate; seconds, so it is
+                                         # independent of the frame sampling rate
+  stationary_variance_threshold: 5.0     # px^2; below this a track is "stationary"
+  stationary_iou_threshold: 0.3          # tau_iou, used for stationary pairs
+  motion_tolerance: 2.5                  # max prediction error, in object diagonals
+  velocity_window: 3                     # frames averaged for exit velocity
+  score_weights:                         # ranking only; never admits a gated-out pair
+    appearance: 0.5
+    motion: 0.3
+    temporal: 0.2
 
 vlm:
   backend: florence2
