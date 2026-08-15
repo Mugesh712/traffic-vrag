@@ -1,0 +1,54 @@
+# Central pipeline configuration. Every module reads its thresholds from here
+# via src/utils/config.py — no thresholds should be hardcoded in module code.
+
+paths:
+  data_dir: data
+  raw_dir: data/raw
+  clips_dir: data/clips
+  frames_dir: data/frames
+  crops_dir: data/crops
+  outputs_dir: data/outputs
+
+ingest:
+  clip_length_sec: 30
+  frame_sample_interval_sec: 1.0
+
+detect:
+  model_path: yolo11n.pt
+  conf_threshold: 0.25
+  iou_threshold: 0.45
+  classes:
+    - car
+    - truck
+    - bus
+    - motorcycle
+    - bicycle
+    - person
+  device: auto
+
+track:
+  tracker: bytetrack
+  reid_model: osnet_x0_25
+  embedding_top_k: 5
+
+association:
+  appearance_similarity_threshold: 0.7
+  max_gap_frames: 30
+  stationary_variance_threshold: 5.0
+
+vlm:
+  backend: florence2
+  frames_per_track: 8
+  cache_dir: data/outputs/vlm_cache
+
+voting:
+  confidence_margin_threshold: 0.15
+  min_evidence_count: 3
+
+linking:
+  appearance_similarity_threshold: 0.75
+  motion_time_gap_max_sec: 120
+
+logging:
+  level: INFO
+  log_dir: data/outputs/logs

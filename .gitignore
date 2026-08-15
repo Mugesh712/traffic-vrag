@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/raw/*
+data/clips/*
+data/frames/*
+data/crops/*
+data/outputs/*
+!data/raw/.gitkeep
+!data/clips/.gitkeep
+!data/frames/.gitkeep
+!data/crops/.gitkeep
+!data/outputs/.gitkeep
+*.pt
+.DS_Store
+.claude/
