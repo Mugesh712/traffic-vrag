@@ -144,7 +144,14 @@ class FrameAttributes(BaseModel):
     make: Optional[str] = None
     model: Optional[str] = None
     direction: Optional[str] = None
+    # Caption *coverage* (how many fields the caption yielded), not a
+    # per-attribute certainty. M6 weights votes by provenance and crop
+    # measurements instead; this is kept as a caption-richness signal.
     confidence: float = 0.0
+    # Inputs to M6's vote weighting, measured where the crop already exists.
+    crop_quality: float = 0.0  # size x sharpness, each capped at 1.0
+    occlusion: float = 0.0  # fraction of this box covered by another track's box
+    from_retry: bool = False  # values came from the speculative retry caption
 
 
 class ClipRawAttributes(BaseModel):
@@ -155,8 +162,15 @@ class ClipRawAttributes(BaseModel):
 class VoteDistribution(BaseModel):
     attribute: str
     winner: Optional[str] = None
+    # Weight shares summing to 1.0, highest first (e.g. white 0.7, silver 0.3).
     distribution: dict[str, float] = Field(default_factory=dict)
     uncertain: bool = False
+    n_votes: int = 0  # observations that supplied a value for this attribute
+    margin: float = 0.0  # winner's share minus runner-up's
+    # "no_evidence" | "insufficient_evidence" | "low_margin" | None. Makes the
+    # M16 ablation ("how often does the system admit uncertainty, and why?")
+    # readable straight off the output.
+    uncertain_reason: Optional[str] = None
 
 
 class CanonicalAttributes(BaseModel):

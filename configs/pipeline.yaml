@@ -63,10 +63,14 @@ vlm:
   batch_size: 8
   frames_per_track: 8
   cache_dir: data/outputs/vlm_cache
+  quality_reference_size_px: 96.0       # crop at/above this scores 1.0 for size
+  quality_reference_sharpness: 200.0    # Laplacian variance scoring 1.0
 
 voting:
-  confidence_margin_threshold: 0.15
-  min_evidence_count: 3
+  # M6 confidence-weighted majority voting.
+  confidence_margin_threshold: 0.15   # winner must beat runner-up by this share
+  min_evidence_count: 3               # fewer supporting observations -> uncertain
+  retry_confidence: 0.6               # weight for values only the retry caption found
 
 linking:
   appearance_similarity_threshold: 0.75

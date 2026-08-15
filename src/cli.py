@@ -107,6 +107,22 @@ def attribute(
 
 
 @app.command()
+def vote(
+    clip_id: str = typer.Argument(..., help="Clip ID to aggregate attributes for."),
+) -> None:
+    """Aggregate per-frame attributes into canonical values by voting (M6)."""
+    from src.semantics.temporal_voting import vote_clip_attributes
+
+    settings = get_settings()
+    canonical = vote_clip_attributes(clip_id, settings=settings)
+    n_uncertain = sum(v.uncertain for t in canonical.tracks for v in t.votes)
+    typer.echo(
+        f"Voted canonical attributes for {len(canonical.tracks)} tracks in {clip_id} "
+        f"({n_uncertain} attributes marked uncertain)"
+    )
+
+
+@app.command()
 def link(
     video_id: str = typer.Argument(..., help="Video ID to link tracks across clips for."),
 ) -> None:

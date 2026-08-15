@@ -77,11 +77,19 @@ class VLMConfig(BaseModel):
     batch_size: int = 8
     frames_per_track: int = 8
     cache_dir: str = "data/outputs/vlm_cache"
+    # Crop-quality references. A crop at or above these is scored 1.0; the
+    # scale is arbitrary because M6 only ever compares weights *within* one
+    # track's votes.
+    quality_reference_size_px: float = 96.0
+    quality_reference_sharpness: float = 200.0
 
 
 class VotingConfig(BaseModel):
     confidence_margin_threshold: float = 0.15
     min_evidence_count: int = 3
+    # Values recovered only by the speculative <MORE_DETAILED_CAPTION> retry
+    # are weaker evidence than ones the primary caption produced.
+    retry_confidence: float = 0.6
 
 
 class LinkingConfig(BaseModel):

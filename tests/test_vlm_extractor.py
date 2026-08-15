@@ -13,24 +13,21 @@ from src.semantics.vlm_extractor import (
     _confidence,
     _crop_hash,
     _load_cached_fields,
-    _match_vocab,
     _save_cached_fields,
     _select_sample_indices,
-    COLOR_VOCAB,
 )
+from src.semantics.vocabulary import COLOR_VOCAB, VEHICLE_TYPE_VOCAB, match_vocab
 
 
 def test_match_vocab_prefers_longer_phrase_first():
     # "pickup truck" must win over a bare "truck" match for the same caption.
-    from src.semantics.vlm_extractor import VEHICLE_TYPE_VOCAB
-
-    assert _match_vocab("a red pickup truck on the road", VEHICLE_TYPE_VOCAB) == "pickup"
+    assert match_vocab("a red pickup truck on the road", VEHICLE_TYPE_VOCAB) == "pickup"
 
 
 def test_match_vocab_word_boundary_avoids_false_substring_match():
     # "tan" must not match inside "instant" or similar.
-    assert _match_vocab("an instant classic car", COLOR_VOCAB) is None
-    assert _match_vocab("a tan sedan", COLOR_VOCAB) == "brown"
+    assert match_vocab("an instant classic car", COLOR_VOCAB) is None
+    assert match_vocab("a tan sedan", COLOR_VOCAB) == "brown"
 
 
 def test_caption_to_fields_extracts_multiple_attributes():
@@ -87,8 +84,10 @@ def test_cache_round_trip(tmp_path):
     fields = {"color": "white", "vehicle_type": "sedan", "make": None, "direction": None, "model": None}
 
     assert _load_cached_fields(tmp_path, crop_hash) is None
-    _save_cached_fields(tmp_path, crop_hash, fields, caption="a white sedan")
-    assert _load_cached_fields(tmp_path, crop_hash) == fields
+    _save_cached_fields(tmp_path, crop_hash, fields, caption="a white sedan", from_retry=True)
+    # Provenance must survive the cache, or a rerun would silently upgrade a
+    # retry-derived value to full weight in M6.
+    assert _load_cached_fields(tmp_path, crop_hash) == (fields, True)
 
     # Sharded by first 2 hex chars, so a flat cache dir never gets huge.
     assert _cache_path(tmp_path, crop_hash).parent.name == crop_hash[:2]

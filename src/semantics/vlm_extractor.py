@@ -28,12 +28,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import cv2
 import numpy as np
 
+from src.semantics.vocabulary import (
+    COLOR_VOCAB,
+    DIRECTION_VOCAB,
+    MAKE_VOCAB,
+    VEHICLE_TYPE_VOCAB,
+    match_vocab,
+)
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.manifest import load_clip_frame_index
@@ -46,107 +53,19 @@ class VLMExtractorError(RuntimeError):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Controlled vocabularies. Each maps a canonical value -> the surface forms
-# that count as a match. Longer/more specific phrases are checked first so
-# e.g. "pickup truck" wins over a bare "truck".
-# ---------------------------------------------------------------------------
-
-COLOR_VOCAB: dict[str, list[str]] = {
-    "white": ["white", "off-white", "off white", "cream"],
-    "black": ["black"],
-    "gray": ["gray", "grey", "charcoal"],
-    "silver": ["silver"],
-    "red": ["red", "maroon", "crimson"],
-    "blue": ["blue", "navy"],
-    "green": ["green"],
-    "yellow": ["yellow"],
-    "orange": ["orange"],
-    "brown": ["brown", "tan", "beige"],
-    "gold": ["gold", "golden"],
-    "purple": ["purple", "violet"],
-    "pink": ["pink"],
-}
-
-VEHICLE_TYPE_VOCAB: dict[str, list[str]] = {
-    "pickup": ["pickup truck", "pickup"],
-    "suv": ["suv", "sport utility vehicle"],
-    "minivan": ["minivan", "mini van"],
-    "van": ["van"],
-    "sedan": ["sedan", "saloon"],
-    "hatchback": ["hatchback"],
-    "coupe": ["coupe"],
-    "convertible": ["convertible"],
-    "wagon": ["station wagon", "wagon"],
-    "taxi": ["taxi", "cab"],
-    "police": ["police car", "police vehicle"],
-    "ambulance": ["ambulance"],
-    "bus": ["bus", "coach"],
-    "truck": ["truck", "lorry"],
-    "motorcycle": ["motorcycle", "motorbike"],
-    "scooter": ["scooter", "moped"],
-    "bicycle": ["bicycle", "bike"],
-}
-
-MAKE_VOCAB: dict[str, list[str]] = {
-    "toyota": ["toyota"],
-    "honda": ["honda"],
-    "ford": ["ford"],
-    "chevrolet": ["chevrolet", "chevy"],
-    "bmw": ["bmw"],
-    "mercedes-benz": ["mercedes-benz", "mercedes benz", "mercedes"],
-    "audi": ["audi"],
-    "tesla": ["tesla"],
-    "nissan": ["nissan"],
-    "hyundai": ["hyundai"],
-    "kia": ["kia"],
-    "volkswagen": ["volkswagen", "vw"],
-    "mazda": ["mazda"],
-    "subaru": ["subaru"],
-    "jeep": ["jeep"],
-    "dodge": ["dodge"],
-    "lexus": ["lexus"],
-    "volvo": ["volvo"],
-    "porsche": ["porsche"],
-    "land rover": ["land rover", "range rover"],
-    "jaguar": ["jaguar"],
-    "suzuki": ["suzuki"],
-    "renault": ["renault"],
-    "tata": ["tata"],
-    "mahindra": ["mahindra"],
-}
-
-# Phrase -> canonical direction. Checked in order; more specific phrases first.
-DIRECTION_VOCAB: dict[str, list[str]] = {
-    "away_from_camera": ["driving away", "moving away", "facing away", "back of the"],
-    "toward_camera": ["facing the camera", "facing forward", "coming toward", "approaching", "front of the"],
-    "left": ["moving to the left", "heading left", "traveling left", "traveling to the left"],
-    "right": ["moving to the right", "heading right", "traveling right", "traveling to the right"],
-    "stationary": ["parked", "standing still", "stationary"],
-}
-
 # Relative weight of each field in the frame-level confidence score. `model`
 # is excluded: Florence-2-base essentially never names a specific model, so
 # including it would flatten confidence toward zero for every frame.
 _CONFIDENCE_WEIGHTS = {"color": 0.4, "vehicle_type": 0.3, "direction": 0.2, "make": 0.1}
 
 
-def _match_vocab(caption: str, vocab: dict[str, list[str]]) -> str | None:
-    lowered = caption.lower()
-    for canonical, surface_forms in vocab.items():
-        for phrase in surface_forms:
-            if re.search(rf"\b{re.escape(phrase)}\b", lowered):
-                return canonical
-    return None
-
-
 def _caption_to_fields(caption: str) -> tuple[dict[str, str | None], int]:
     fields = {
-        "color": _match_vocab(caption, COLOR_VOCAB),
-        "vehicle_type": _match_vocab(caption, VEHICLE_TYPE_VOCAB),
-        "make": _match_vocab(caption, MAKE_VOCAB),
+        "color": match_vocab(caption, COLOR_VOCAB),
+        "vehicle_type": match_vocab(caption, VEHICLE_TYPE_VOCAB),
+        "make": match_vocab(caption, MAKE_VOCAB),
         "model": None,  # needs OCR/logo reading or a stronger VLM; see M8 note below
-        "direction": _match_vocab(caption, DIRECTION_VOCAB),
+        "direction": match_vocab(caption, DIRECTION_VOCAB),
     }
     n_found = sum(1 for k in _CONFIDENCE_WEIGHTS if fields[k] is not None)
     return fields, n_found
@@ -275,22 +194,81 @@ def _cache_path(cache_dir, crop_hash: str):
     return cache_dir / crop_hash[:2] / f"{crop_hash}.json"
 
 
-def _load_cached_fields(cache_dir, crop_hash: str) -> dict[str, str | None] | None:
+def _load_cached_fields(cache_dir, crop_hash: str) -> tuple[dict[str, str | None], bool] | None:
     path = _cache_path(cache_dir, crop_hash)
     if not path.exists():
         return None
-    return json.loads(path.read_text())["fields"]
+    payload = json.loads(path.read_text())
+    return payload["fields"], payload.get("from_retry", False)
 
 
-def _save_cached_fields(cache_dir, crop_hash: str, fields: dict[str, str | None], caption: str) -> None:
+def _save_cached_fields(
+    cache_dir,
+    crop_hash: str,
+    fields: dict[str, str | None],
+    caption: str,
+    from_retry: bool = False,
+) -> None:
     path = _cache_path(cache_dir, crop_hash)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"fields": fields, "caption": caption}, indent=2))
+    path.write_text(
+        json.dumps({"fields": fields, "caption": caption, "from_retry": from_retry}, indent=2)
+    )
 
 
 # ---------------------------------------------------------------------------
 # Frame sampling
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class _CropJob:
+    track_id: str
+    frame_id: str
+    crop: np.ndarray
+    crop_hash: str
+    crop_quality: float
+    occlusion: float
+
+
+def _crop_quality(crop: np.ndarray, settings: PipelineSettings) -> float:
+    """Size x sharpness, each capped at 1.0.
+
+    Absolute scale is arbitrary — M6 only compares weights within one track's
+    votes — so this just has to be monotone in "how readable is this crop".
+    """
+    h, w = crop.shape[:2]
+    if h < 2 or w < 2:
+        return 0.0
+    size_score = min(1.0, float(np.sqrt(h * w)) / settings.vlm.quality_reference_size_px)
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    sharpness_score = min(1.0, sharpness / settings.vlm.quality_reference_sharpness)
+    return size_score * sharpness_score
+
+
+def _overlap_fraction(
+    bbox: tuple[float, float, float, float], others: list[tuple[float, float, float, float]]
+) -> float:
+    """Largest fraction of `bbox` covered by any other track's box in the frame.
+
+    An occlusion *proxy*, and deliberately an upper bound: without depth we
+    cannot tell whether the overlapping object is in front or behind. Uses
+    intersection-over-own-area rather than IoU, because a large bus overlapping
+    a small car scores low IoU while hiding most of the car.
+    """
+    x1, y1, x2, y2 = bbox
+    own_area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    if own_area <= 0:
+        return 0.0
+
+    worst = 0.0
+    for ox1, oy1, ox2, oy2 in others:
+        ix1, iy1 = max(x1, ox1), max(y1, oy1)
+        ix2, iy2 = min(x2, ox2), min(y2, oy2)
+        intersection = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        worst = max(worst, intersection / own_area)
+    return min(1.0, worst)
 
 
 def _select_sample_indices(n_available: int, n_samples: int) -> list[int]:
@@ -320,10 +298,16 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
     frame_paths, _ = load_clip_frame_index(clip_id, settings)
     cache_dir = settings.resolve_path(settings.vlm.cache_dir)
 
-    # (track_id, frame_id, crop, crop_hash) for every sampled frame, across
-    # every track, so the VLM backend can batch across the whole clip rather
-    # than per-track.
-    jobs: list[tuple[str, str, np.ndarray, str]] = []
+    # Every track's box in every frame, so a crop's occlusion can be measured
+    # against its neighbours rather than guessed.
+    boxes_by_frame: dict[str, list[tuple[str, tuple[float, float, float, float]]]] = {}
+    for track in clip_tracks.tracks:
+        for frame_id, bbox in zip(track.frames, track.bboxes):
+            boxes_by_frame.setdefault(frame_id, []).append((track.track_id, tuple(bbox)))
+
+    # One job per sampled crop, flattened across tracks so the VLM backend can
+    # batch over the whole clip rather than per track.
+    jobs: list[_CropJob] = []
     frame_image_cache: dict[str, np.ndarray] = {}
 
     for track in clip_tracks.tracks:
@@ -338,14 +322,29 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
                 frame_image_cache[frame_id] = image
             image = frame_image_cache[frame_id]
 
-            x1, y1, x2, y2 = track.bboxes[i]
+            raw_bbox = tuple(track.bboxes[i])
             h, w = image.shape[:2]
-            x1, y1 = max(0, int(x1)), max(0, int(y1))
-            x2, y2 = min(w, int(x2)), min(h, int(y2))
+            x1, y1 = max(0, int(raw_bbox[0])), max(0, int(raw_bbox[1]))
+            x2, y2 = min(w, int(raw_bbox[2])), min(h, int(raw_bbox[3]))
             if x2 <= x1 or y2 <= y1:
                 continue
             crop = image[y1:y2, x1:x2]
-            jobs.append((track.track_id, frame_id, crop, _crop_hash(crop)))
+
+            others = [
+                bbox
+                for other_id, bbox in boxes_by_frame.get(frame_id, [])
+                if other_id != track.track_id
+            ]
+            jobs.append(
+                _CropJob(
+                    track_id=track.track_id,
+                    frame_id=frame_id,
+                    crop=crop,
+                    crop_hash=_crop_hash(crop),
+                    crop_quality=_crop_quality(crop, settings),
+                    occlusion=_overlap_fraction(raw_bbox, others),
+                )
+            )
 
     logger.info(
         "extract_clip_attributes: clip_id=%s n_tracks=%d n_sampled_crops=%d",
@@ -354,11 +353,13 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
         len(jobs),
     )
 
-    # Cache lookup first — only crops that actually need the VLM go to the backend.
-    results: dict[int, dict[str, str | None]] = {}
+    # Cache lookup first — only crops that actually need the VLM go to the
+    # backend. Caption-derived fields and their provenance are cached; the
+    # geometric measurements are not, since they depend on boxes, not pixels.
+    results: dict[int, tuple[dict[str, str | None], bool]] = {}
     uncached: list[int] = []
-    for idx, (_, _, crop, crop_hash) in enumerate(jobs):
-        cached = _load_cached_fields(cache_dir, crop_hash)
+    for idx, job in enumerate(jobs):
+        cached = _load_cached_fields(cache_dir, job.crop_hash)
         if cached is not None:
             results[idx] = cached
         else:
@@ -370,10 +371,11 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
 
         for start in range(0, len(uncached), batch_size):
             batch_idx = uncached[start : start + batch_size]
-            crops = [jobs[i][2] for i in batch_idx]
+            crops = [jobs[i].crop for i in batch_idx]
 
             captions = backend.caption(crops, backend.PRIMARY_TASK)
             fields_and_counts = [_caption_to_fields(c) for c in captions]
+            from_retry = [False] * len(batch_idx)
 
             retry_idx = [i for i, (_, n) in enumerate(fields_and_counts) if n == 0]
             if retry_idx:
@@ -383,21 +385,33 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
                     if retry_n > 0:
                         fields_and_counts[local_i] = (retry_fields, retry_n)
                         captions[local_i] = retry_caption
+                        from_retry[local_i] = True
 
             for local_i, job_idx in enumerate(batch_idx):
                 fields, _ = fields_and_counts[local_i]
-                results[job_idx] = fields
-                _save_cached_fields(cache_dir, jobs[job_idx][3], fields, captions[local_i])
+                results[job_idx] = (fields, from_retry[local_i])
+                _save_cached_fields(
+                    cache_dir,
+                    jobs[job_idx].crop_hash,
+                    fields,
+                    captions[local_i],
+                    from_retry[local_i],
+                )
 
-    attributes = [
-        FrameAttributes(
-            track_id=track_id,
-            frame_id=frame_id,
-            **results[idx],
-            confidence=_confidence(results[idx]),
+    attributes = []
+    for idx, job in enumerate(jobs):
+        fields, was_retry = results[idx]
+        attributes.append(
+            FrameAttributes(
+                track_id=job.track_id,
+                frame_id=job.frame_id,
+                **fields,
+                confidence=_confidence(fields),
+                crop_quality=job.crop_quality,
+                occlusion=job.occlusion,
+                from_retry=was_retry,
+            )
         )
-        for idx, (track_id, frame_id, _, _) in enumerate(jobs)
-    ]
 
     clip_attributes = ClipRawAttributes(clip_id=clip_id, attributes=attributes)
 
