@@ -127,9 +127,15 @@ def link(
     video_id: str = typer.Argument(..., help="Video ID to link tracks across clips for."),
 ) -> None:
     """Run cross-clip global linking to build the master object index (M7)."""
+    from src.semantics.global_linking import link_video
+
     settings = get_settings()
-    logger.info("link: video_id=%s appearance_threshold=%s", video_id, settings.linking.appearance_similarity_threshold)
-    raise NotImplementedError("M7: src/semantics/global_linking.py not implemented yet")
+    index = link_video(video_id, settings=settings)
+    n_multi_clip = sum(1 for o in index.objects if len(o.sightings) > 1)
+    typer.echo(
+        f"Linked {video_id}: {len(index.objects)} global objects "
+        f"({n_multi_clip} spanning multiple clips)"
+    )
 
 
 @app.command(name="build-kg")

@@ -204,8 +204,27 @@ class GlobalObject(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class RejectedGlobalLinkEntry(BaseModel):
+    """A cross-clip pair that did not become a link. Same three-log structure
+    as M4: `failed_gate` names the first gate to fail, or
+    "assignment_conflict" when the pair cleared every gate but the Hungarian
+    solver assigned one of its endpoints elsewhere."""
+
+    from_clip_id: str
+    from_track_id: str
+    to_clip_id: str
+    to_track_id: str
+    failed_gate: str
+    gate_scores: dict[str, float] = Field(default_factory=dict)
+
+
 class MasterObjectIndex(BaseModel):
+    video_id: str = ""
     objects: list[GlobalObject] = Field(default_factory=list)
+    # Failed a hard gate.
+    rejected_links: list[RejectedGlobalLinkEntry] = Field(default_factory=list)
+    # Cleared every gate but lost its endpoint in the assignment.
+    suppressed_links: list[RejectedGlobalLinkEntry] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

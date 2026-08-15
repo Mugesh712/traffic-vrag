@@ -92,9 +92,28 @@ class VotingConfig(BaseModel):
     retry_confidence: float = 0.6
 
 
+class LinkingScoreWeights(BaseModel):
+    appearance: float = 0.4
+    motion: float = 0.3
+    semantic: float = 0.3
+
+
 class LinkingConfig(BaseModel):
     appearance_similarity_threshold: float = 0.75
-    motion_time_gap_max_sec: float = 120.0
+    # Clips are contiguous, so a genuine cross-boundary link spans about one
+    # frame interval. A large budget here would let the gate bless a track
+    # that vanished mid-clip -- exactly the false link it exists to stop.
+    max_gap_sec: float = 5.0
+    motion_tolerance: float = 3.0  # prediction error, in object diagonals
+    velocity_window: int = 3
+    # Only adjacent clips by default: motion extrapolation degrades fast, and
+    # a vehicle reappearing several clips later is a re-entry, not a
+    # continuation. Raising this trades under-linking for invented identity.
+    max_clip_distance: int = 1
+    # Ablation switches for M16 ("remove the semantic gate from M7").
+    enable_semantic_gate: bool = True
+    enable_appearance_gate: bool = True
+    score_weights: LinkingScoreWeights = LinkingScoreWeights()
 
 
 class LoggingConfig(BaseModel):

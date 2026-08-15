@@ -73,8 +73,20 @@ voting:
   retry_confidence: 0.6               # weight for values only the retry caption found
 
 linking:
+  # M7 cross-clip hard gates: CLASS -> SEMANTIC -> MOTION -> APPEARANCE.
   appearance_similarity_threshold: 0.75
-  motion_time_gap_max_sec: 120
+  # Clips are contiguous, so a real cross-boundary link spans ~one frame
+  # interval. A large budget would bless tracks that vanished mid-clip.
+  max_gap_sec: 5.0
+  motion_tolerance: 3.0       # prediction error, in object diagonals
+  velocity_window: 3          # frames averaged for exit velocity
+  max_clip_distance: 1        # adjacent clips only; see config.py
+  enable_semantic_gate: true  # M16 ablation switch
+  enable_appearance_gate: true
+  score_weights:              # ranking only; never admits a gated-out pair
+    appearance: 0.4
+    motion: 0.3
+    semantic: 0.3
 
 logging:
   level: INFO
