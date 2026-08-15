@@ -172,8 +172,15 @@ def build_kg(
     video_id: str = typer.Argument(..., help="Video ID to materialize into the knowledge graph."),
 ) -> None:
     """Load the master object index and events into Neo4j (M10)."""
-    logger.info("build-kg: video_id=%s", video_id)
-    raise NotImplementedError("M10: src/graph/kg_builder.py not implemented yet")
+    from src.graph.kg_builder import build_kg as _build_kg
+
+    settings = get_settings()
+    payload = _build_kg(video_id, settings=settings)
+    counts = payload.counts()
+    typer.echo(
+        f"Loaded {video_id} into Neo4j: "
+        + ", ".join(f"{v} {k}" for k, v in counts.items() if v)
+    )
 
 
 @app.command()

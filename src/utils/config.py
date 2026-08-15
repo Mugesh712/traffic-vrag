@@ -157,6 +157,17 @@ class EventsConfig(BaseModel):
     regions_dir: str = "configs/regions"  # per-video line/region YAML, optional
 
 
+class Neo4jConfig(BaseModel):
+    """M10 knowledge graph connection. Override the password out of band with
+    PIPELINE__NEO4J__PASSWORD rather than committing it here."""
+
+    uri: str = "bolt://localhost:7687"
+    user: str = "neo4j"
+    password: str = "traffic-vrag"
+    database: str = "neo4j"
+    batch_size: int = 1000
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -184,6 +195,7 @@ class PipelineSettings(BaseSettings):
     linking: LinkingConfig = LinkingConfig()
     confirmation: ConfirmationConfig = ConfirmationConfig()
     events: EventsConfig = EventsConfig()
+    neo4j: Neo4jConfig = Neo4jConfig()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:

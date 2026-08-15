@@ -121,6 +121,15 @@ events:
   max_evidence_frames: 5
   regions_dir: configs/regions        # per-video line/region YAML, optional
 
+neo4j:
+  # M10 knowledge graph. Override the password out of band:
+  #   export PIPELINE__NEO4J__PASSWORD=...
+  uri: bolt://localhost:7687
+  user: neo4j
+  password: traffic-vrag
+  database: neo4j
+  batch_size: 1000
+
 logging:
   level: INFO
   log_dir: data/outputs/logs
