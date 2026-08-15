@@ -151,6 +151,16 @@ retrieval_weights:
   graph: 0.35        # exact constraint satisfaction, authoritative
   confidence: 0.15   # the system's own certainty in the matched attributes
 
+answer:
+  # M13 LLM reasoning & explainable answer generation.
+  backend: ollama
+  model: qwen2.5:7b
+  host: http://localhost:11434
+  timeout_sec: 60.0
+  temperature: 0.1        # grounded factual answering, not creative generation
+  max_context_objects: 8
+  max_events_per_object: 5
+
 logging:
   level: INFO
   log_dir: data/outputs/logs

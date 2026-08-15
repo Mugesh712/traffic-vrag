@@ -6,7 +6,7 @@ reads and validates it back from disk.
 """
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -355,6 +355,49 @@ class RetrievalResult(BaseModel):
     count_breakdown: list[dict] = Field(default_factory=list)
     cypher_queries: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# M13 — LLM reasoning & explainable answer
+# ---------------------------------------------------------------------------
+
+
+class TimestampSpan(BaseModel):
+    start: str
+    end: str
+
+
+class KGNode(BaseModel):
+    id: str
+    label: str  # "TrafficObject" | "Event" | "Location"
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+
+class KGEdge(BaseModel):
+    source: str
+    target: str
+    type: str
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+
+class KGSubgraph(BaseModel):
+    nodes: list[KGNode] = Field(default_factory=list)
+    edges: list[KGEdge] = Field(default_factory=list)
+
+
+class AnswerResult(BaseModel):
+    answer: str
+    supporting_object_ids: list[str] = Field(default_factory=list)
+    timestamps: list[TimestampSpan] = Field(default_factory=list)
+    evidence_frames: list[str] = Field(default_factory=list)
+    kg_subgraph: KGSubgraph = Field(default_factory=KGSubgraph)
+    reasoning_trace: str = ""
+    # "answered" | "insufficient_evidence" | "counting"
+    status: str = "answered"
+    # Citations the model made that named an object outside the retrieved
+    # context. Never silently dropped -- surfaced so a hallucinated reference
+    # is visible rather than laundered into a clean-looking answer.
+    unsupported_citations: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

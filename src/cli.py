@@ -235,6 +235,32 @@ def query(
 
 
 @app.command()
+def ask(
+    video_id: str = typer.Argument(..., help="Video ID to query."),
+    question: str = typer.Argument(..., help="Natural-language question."),
+) -> None:
+    """Retrieve and answer a question with a grounded, cited answer (M12+M13)."""
+    from src.retrieval.answer_generator import generate_answer
+    from src.retrieval.hybrid_retriever import hybrid_retrieve
+
+    settings = get_settings()
+    result = hybrid_retrieve(question, video_id, settings=settings)
+    for warning in result.warnings:
+        typer.echo(f"warning: {warning}")
+
+    answer = generate_answer(result, settings=settings)
+    typer.echo(f"\n{answer.answer}")
+    typer.echo(f"\nstatus: {answer.status}")
+    if answer.supporting_object_ids:
+        typer.echo(f"supporting objects: {answer.supporting_object_ids}")
+    if answer.timestamps:
+        typer.echo(f"timestamps: {[(t.start, t.end) for t in answer.timestamps]}")
+    if answer.unsupported_citations:
+        typer.echo(f"unsupported citations: {answer.unsupported_citations}")
+    typer.echo(f"reasoning: {answer.reasoning_trace}")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind the API server to."),
     port: int = typer.Option(8000, help="Port to bind the API server to."),

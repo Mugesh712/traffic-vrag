@@ -17,3 +17,4 @@ accelerate>=0.30
 pillow>=10.0
 neo4j>=5.20
 chromadb>=1.0
+requests>=2.31

@@ -201,6 +201,21 @@ class RetrievalConfig(BaseModel):
     intent_backend: str = "rules"  # "rules" | "llm" (M13 supplies the LLM one)
 
 
+class AnswerConfig(BaseModel):
+    """M13 LLM reasoning & explainable answer generation."""
+
+    backend: str = "ollama"
+    model: str = "qwen2.5:7b"
+    host: str = "http://localhost:11434"
+    timeout_sec: float = 60.0
+    # Low: this is grounded factual answering, not creative generation. High
+    # temperature buys nothing here and only risks the model drifting off the
+    # provided context.
+    temperature: float = 0.1
+    max_context_objects: int = 8
+    max_events_per_object: int = 5
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -232,6 +247,7 @@ class PipelineSettings(BaseSettings):
     vector_store: VectorStoreConfig = VectorStoreConfig()
     retrieval: RetrievalConfig = RetrievalConfig()
     retrieval_weights: RetrievalWeights = RetrievalWeights()
+    answer: AnswerConfig = AnswerConfig()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:
