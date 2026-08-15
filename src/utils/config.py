@@ -168,6 +168,14 @@ class Neo4jConfig(BaseModel):
     batch_size: int = 1000
 
 
+class VectorStoreConfig(BaseModel):
+    """M11 ChromaDB vector store."""
+
+    persist_dir: str = "data/outputs/vector_store"
+    object_collection: str = "object_timelines"
+    event_collection: str = "events"
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -196,6 +204,7 @@ class PipelineSettings(BaseSettings):
     confirmation: ConfirmationConfig = ConfirmationConfig()
     events: EventsConfig = EventsConfig()
     neo4j: Neo4jConfig = Neo4jConfig()
+    vector_store: VectorStoreConfig = VectorStoreConfig()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:

@@ -130,6 +130,12 @@ neo4j:
   database: neo4j
   batch_size: 1000
 
+vector_store:
+  # M11 ChromaDB vector store.
+  persist_dir: data/outputs/vector_store
+  object_collection: object_timelines
+  event_collection: events
+
 logging:
   level: INFO
   log_dir: data/outputs/logs

@@ -184,6 +184,18 @@ def build_kg(
 
 
 @app.command()
+def index(
+    video_id: str = typer.Argument(..., help="Video ID to embed into the vector store."),
+) -> None:
+    """Embed object timelines and events into ChromaDB (M11)."""
+    from src.retrieval.vector_store import populate_vector_store
+
+    settings = get_settings()
+    object_ids, event_ids = populate_vector_store(video_id, settings=settings)
+    typer.echo(f"Indexed {video_id}: {len(object_ids)} object timelines, {len(event_ids)} events")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind the API server to."),
     port: int = typer.Option(8000, help="Port to bind the API server to."),
