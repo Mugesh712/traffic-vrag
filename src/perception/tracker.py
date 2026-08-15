@@ -178,7 +178,7 @@ def track_clip(clip_id: str, settings: PipelineSettings | None = None) -> ClipTr
         raise TrackerError(f"No detections found for {clip_id} at {detections_path}; run `detect` first.")
     clip_detections = ClipDetections.model_validate_json(detections_path.read_text())
 
-    frame_paths, frame_timestamps = load_clip_frame_index(clip_id, settings)
+    frame_paths, frame_timestamps, _ = load_clip_frame_index(clip_id, settings)
 
     detections_by_frame: dict[str, list] = defaultdict(list)
     for det in clip_detections.detections:

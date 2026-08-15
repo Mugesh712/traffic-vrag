@@ -292,6 +292,10 @@ class Event(BaseModel):
     end_time: str
     confidence: float
     evidence_frames: list[str] = Field(default_factory=list)
+    # Type-specific detail that doesn't fit subject/object: the crossed
+    # region/line id for CROSSES, turn direction for TURN, etc. Keeps the
+    # schema from growing a new optional column per event type.
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class EventLog(BaseModel):

@@ -155,6 +155,18 @@ def confirm(
     )
 
 
+@app.command()
+def events(
+    video_id: str = typer.Argument(..., help="Video ID to detect events for."),
+) -> None:
+    """Detect rule-based events from global object trajectories (M9)."""
+    from src.graph.event_detector import detect_events
+
+    settings = get_settings()
+    log = detect_events(video_id, settings=settings)
+    typer.echo(f"Detected {len(log.events)} events for {video_id}")
+
+
 @app.command(name="build-kg")
 def build_kg(
     video_id: str = typer.Argument(..., help="Video ID to materialize into the knowledge graph."),

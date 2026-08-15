@@ -16,10 +16,11 @@ class ManifestLookupError(RuntimeError):
 
 def load_clip_frame_index(
     clip_id: str, settings: PipelineSettings
-) -> tuple[dict[str, str], dict[str, float]]:
+) -> tuple[dict[str, str], dict[str, float], dict[str, str]]:
     """Find the VideoManifest containing `clip_id`.
 
-    Returns (frame_id -> frame_path, frame_id -> video_timestamp_sec).
+    Returns (frame_id -> frame_path, frame_id -> video_timestamp_sec,
+    frame_id -> wallclock_time).
     """
     ingest_dir = settings.resolve_path(settings.paths.outputs_dir) / "ingest"
     for manifest_path in sorted(ingest_dir.glob("*_manifest.json")):
@@ -28,7 +29,8 @@ def load_clip_frame_index(
             if clip.clip_id == clip_id:
                 paths = {f.frame_id: f.frame_path for f in clip.frames}
                 timestamps = {f.frame_id: f.video_timestamp_sec for f in clip.frames}
-                return paths, timestamps
+                wallclocks = {f.frame_id: f.wallclock_time for f in clip.frames}
+                return paths, timestamps, wallclocks
     raise ManifestLookupError(
         f"No ingest manifest under {ingest_dir} contains clip_id={clip_id}; run `ingest` first."
     )

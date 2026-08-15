@@ -135,6 +135,28 @@ class ConfirmationConfig(BaseModel):
     disagreement_penalty: float = 0.2  # applied when clip-level overrules best shot
 
 
+class EventsConfig(BaseModel):
+    """M9 rule-based event detection. All thresholds are in pixels/sec and
+    seconds, on each global object's stitched real-timestamp trajectory."""
+
+    stop_speed_threshold_px_s: float = 5.0  # below this, considered stopped
+    stop_min_duration_sec: float = 2.0
+    moving_speed_threshold_px_s: float = 8.0  # above this, heading is trusted
+    turn_min_degrees: float = 45.0
+    turn_min_window_sec: float = 0.5  # guards against single-sample noise
+    turn_max_window_sec: float = 8.0
+    lane_change_min_lateral_px: float = 40.0
+    lane_change_max_heading_deg: float = 20.0  # heading must stay roughly constant
+    lane_change_min_window_sec: float = 0.5
+    lane_change_max_window_sec: float = 6.0
+    overtake_max_heading_diff_deg: float = 30.0  # "same direction" gate
+    overtake_min_lateral_px: float = 15.0  # "lateral displacement present" gate
+    overtake_min_sustain_sec: float = 1.0
+    overtake_max_window_sec: float = 15.0
+    max_evidence_frames: int = 5
+    regions_dir: str = "configs/regions"  # per-video line/region YAML, optional
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -161,6 +183,7 @@ class PipelineSettings(BaseSettings):
     voting: VotingConfig = VotingConfig()
     linking: LinkingConfig = LinkingConfig()
     confirmation: ConfirmationConfig = ConfirmationConfig()
+    events: EventsConfig = EventsConfig()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:

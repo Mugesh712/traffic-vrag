@@ -377,7 +377,7 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
         )
     clip_tracks = ClipAssociatedTracks.model_validate_json(tracks_path.read_text())
 
-    frame_paths, _ = load_clip_frame_index(clip_id, settings)
+    frame_paths, _, _ = load_clip_frame_index(clip_id, settings)
 
     # Every track's box in every frame, so a crop's occlusion can be measured
     # against its neighbours rather than guessed.

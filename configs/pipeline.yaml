@@ -101,6 +101,26 @@ confirmation:
   confidence_boost: 0.1             # best shot agrees with clip-level voting
   disagreement_penalty: 0.2         # clip-level overrules the best shot
 
+events:
+  # M9 rule-based event detection. Thresholds are px/sec and seconds, applied
+  # to each global object's stitched, real-timestamp trajectory.
+  stop_speed_threshold_px_s: 5.0
+  stop_min_duration_sec: 2.0
+  moving_speed_threshold_px_s: 8.0    # heading is only trusted above this speed
+  turn_min_degrees: 45.0
+  turn_min_window_sec: 0.5            # guards against single-sample noise
+  turn_max_window_sec: 8.0
+  lane_change_min_lateral_px: 40.0
+  lane_change_max_heading_deg: 20.0   # heading must stay roughly constant
+  lane_change_min_window_sec: 0.5
+  lane_change_max_window_sec: 6.0
+  overtake_max_heading_diff_deg: 30.0 # "same direction" gate
+  overtake_min_lateral_px: 15.0       # "lateral displacement present" gate
+  overtake_min_sustain_sec: 1.0
+  overtake_max_window_sec: 15.0
+  max_evidence_frames: 5
+  regions_dir: configs/regions        # per-video line/region YAML, optional
+
 logging:
   level: INFO
   log_dir: data/outputs/logs
