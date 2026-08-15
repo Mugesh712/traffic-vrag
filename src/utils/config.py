@@ -67,6 +67,14 @@ class AssociationConfig(BaseModel):
 
 class VLMConfig(BaseModel):
     backend: str = "florence2"
+    model_id: str = "microsoft/Florence-2-base"
+    # "auto" resolves to cuda if available, else cpu. MPS is deliberately
+    # excluded: Florence-2's custom remote-code ops hang on Apple's MPS
+    # backend (observed: single caption exceeded 10 minutes vs ~2s on CPU).
+    device: str = "auto"
+    max_new_tokens: int = 200
+    num_beams: int = 3
+    batch_size: int = 8
     frames_per_track: int = 8
     cache_dir: str = "data/outputs/vlm_cache"
 

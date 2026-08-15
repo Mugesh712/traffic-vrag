@@ -99,9 +99,11 @@ def attribute(
     clip_id: str = typer.Argument(..., help="Clip ID to extract attributes for."),
 ) -> None:
     """Run VLM attribute extraction on a clip's tracks (M5)."""
+    from src.semantics.vlm_extractor import extract_clip_attributes
+
     settings = get_settings()
-    logger.info("attribute: clip_id=%s backend=%s", clip_id, settings.vlm.backend)
-    raise NotImplementedError("M5: src/semantics/vlm_extractor.py not implemented yet")
+    clip_attributes = extract_clip_attributes(clip_id, settings=settings)
+    typer.echo(f"Extracted attributes for {len(clip_attributes.attributes)} frame-observations in {clip_id}")
 
 
 @app.command()

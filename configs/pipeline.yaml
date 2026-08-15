@@ -56,6 +56,11 @@ association:
 
 vlm:
   backend: florence2
+  model_id: microsoft/Florence-2-base
+  device: auto              # cuda if available else cpu; never mps (see config.py)
+  max_new_tokens: 200
+  num_beams: 3
+  batch_size: 8
   frames_per_track: 8
   cache_dir: data/outputs/vlm_cache
 
