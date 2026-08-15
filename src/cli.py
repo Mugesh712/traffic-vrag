@@ -138,6 +138,23 @@ def link(
     )
 
 
+@app.command()
+def confirm(
+    video_id: str = typer.Argument(..., help="Video ID to run best-shot confirmation for."),
+) -> None:
+    """Re-read each global object's best shots and lock in attributes (M8)."""
+    from src.semantics.best_shot_confirmation import confirm_video
+
+    settings = get_settings()
+    final_index = confirm_video(video_id, settings=settings)
+    corrected = sum(1 for e in final_index.correction_log if e.outcome == "corrected")
+    filled = sum(1 for e in final_index.correction_log if e.outcome == "filled")
+    typer.echo(
+        f"Confirmed {len(final_index.objects)} objects in {video_id} "
+        f"({filled} attributes filled, {corrected} corrected)"
+    )
+
+
 @app.command(name="build-kg")
 def build_kg(
     video_id: str = typer.Argument(..., help="Video ID to materialize into the knowledge graph."),

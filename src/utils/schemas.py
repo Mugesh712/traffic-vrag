@@ -228,6 +228,55 @@ class MasterObjectIndex(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# M8 — Global best-shot confirmation
+# ---------------------------------------------------------------------------
+
+
+class FinalAttribute(BaseModel):
+    attribute: str
+    value: Optional[str] = None
+    confidence: float = 0.0
+    # "agreed" | "clip_voting" | "best_shot" | "unconfirmed"
+    source: str = "unconfirmed"
+    uncertain: bool = True
+
+
+class CorrectionLogEntry(BaseModel):
+    """One attribute where the best-shot pass changed or confirmed the
+    clip-level answer. Counted per outcome, this is a paper result: it
+    quantifies how much semantic correction the system actually performs.
+
+    `filled` (best shot answered where clip-level voting was uncertain) is
+    kept distinct from `corrected` (best shot overturned a confident answer) --
+    they are different claims and should not be reported as one total.
+    """
+
+    global_id: str
+    attribute: str
+    clip_level_value: Optional[str] = None
+    best_shot_value: Optional[str] = None
+    final_value: Optional[str] = None
+    # "confirmed" | "filled" | "corrected" | "retained" | "unconfirmed"
+    outcome: str
+
+
+class GlobalObjectFinal(BaseModel):
+    global_id: str
+    cls: TrafficClass = Field(alias="class")
+    sightings: list[Sighting] = Field(default_factory=list)
+    attributes: list[FinalAttribute] = Field(default_factory=list)
+    best_shot_crops: list[str] = Field(default_factory=list)  # the crops actually re-read
+
+    model_config = {"populate_by_name": True}
+
+
+class FinalObjectIndex(BaseModel):
+    video_id: str = ""
+    objects: list[GlobalObjectFinal] = Field(default_factory=list)
+    correction_log: list[CorrectionLogEntry] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # M9 — Events
 # ---------------------------------------------------------------------------
 

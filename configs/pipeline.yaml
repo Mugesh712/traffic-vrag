@@ -88,6 +88,19 @@ linking:
     motion: 0.3
     semantic: 0.3
 
+confirmation:
+  # M8 global best-shot confirmation.
+  top_k: 3                          # best shots re-read with the high-detail prompt
+  quality_reference_size_px: 128.0
+  quality_reference_sharpness: 200.0
+  viewpoint_weight: 0.5             # 0 disables the frontality preference entirely
+  frontal_aspect_ratio: 1.2         # w/h at or below this reads as frontal
+  side_aspect_ratio: 2.2            # at or above this reads as side-on
+  min_evidence_count: 1             # one excellent crop is evidence here
+  confidence_margin_threshold: 0.15
+  confidence_boost: 0.1             # best shot agrees with clip-level voting
+  disagreement_penalty: 0.2         # clip-level overrules the best shot
+
 logging:
   level: INFO
   log_dir: data/outputs/logs

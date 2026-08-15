@@ -134,9 +134,6 @@ class Florence2Backend:
             captions.append(parsed.get(task, ""))
         return captions
 
-    PRIMARY_TASK = "<DETAILED_CAPTION>"
-    RETRY_TASK = "<MORE_DETAILED_CAPTION>"
-
 
 class _UnimplementedBackend:
     def __init__(self, name: str):
@@ -148,8 +145,23 @@ class _UnimplementedBackend:
             "(configs/pipeline.yaml: vlm.backend)."
         )
 
-    PRIMARY_TASK = "<DETAILED_CAPTION>"
-    RETRY_TASK = "<MORE_DETAILED_CAPTION>"
+
+# (standard task, high-detail task) per backend. Declared outside the backend
+# classes so callers can build cache keys without instantiating a model —
+# otherwise a fully cached run would still pay to load the VLM.
+BACKEND_TASKS: dict[str, tuple[str, str]] = {
+    "florence2": ("<DETAILED_CAPTION>", "<MORE_DETAILED_CAPTION>"),
+    "blip2": ("<DETAILED_CAPTION>", "<MORE_DETAILED_CAPTION>"),
+    "internvl2": ("<DETAILED_CAPTION>", "<MORE_DETAILED_CAPTION>"),
+}
+
+
+def get_tasks(settings: PipelineSettings) -> tuple[str, str]:
+    """(standard, high_detail) task tokens for the configured backend."""
+    try:
+        return BACKEND_TASKS[settings.vlm.backend]
+    except KeyError:
+        raise VLMExtractorError(f"Unknown VLM backend: {settings.vlm.backend}") from None
 
 
 _BACKEND_CACHE: dict[str, Any] = {}
@@ -183,8 +195,15 @@ def _load_backend(settings: PipelineSettings) -> VLMBackend:
 # ---------------------------------------------------------------------------
 
 
-def _crop_hash(crop: np.ndarray) -> str:
+def _crop_hash(crop: np.ndarray, task: str) -> str:
+    """Key on pixels AND the task token.
+
+    Without the task in the key, a crop captioned by M5 under the standard
+    task would be served back to M8 when it asks for the high-detail one --
+    silently defeating the entire point of the best-shot pass.
+    """
     h = hashlib.sha256()
+    h.update(task.encode())
     h.update(str(crop.shape).encode())
     h.update(crop.tobytes())
     return h.hexdigest()
@@ -216,6 +235,70 @@ def _save_cached_fields(
     )
 
 
+def caption_crops_to_fields(
+    crops: list[np.ndarray],
+    settings: PipelineSettings,
+    *,
+    task: str,
+    retry_task: str | None = None,
+) -> list[tuple[dict[str, str | None], bool]]:
+    """Caption crops and parse them to attribute fields, using the cache.
+
+    Returns (fields, from_retry) per crop, in input order. The backend is only
+    loaded if at least one crop misses the cache. When `retry_task` is given,
+    crops whose caption yielded nothing are retried once with it; M8 passes
+    None, since it already asks for the most detailed caption available.
+
+    Shared with M8 so the two VLM passes cannot drift apart in caching,
+    batching or parsing behaviour.
+    """
+    cache_dir = settings.resolve_path(settings.vlm.cache_dir)
+    hashes = [_crop_hash(crop, task) for crop in crops]
+
+    results: dict[int, tuple[dict[str, str | None], bool]] = {}
+    uncached: list[int] = []
+    for i, crop_hash in enumerate(hashes):
+        cached = _load_cached_fields(cache_dir, crop_hash)
+        if cached is not None:
+            results[i] = cached
+        else:
+            uncached.append(i)
+
+    if uncached:
+        backend = _load_backend(settings)
+        batch_size = settings.vlm.batch_size
+
+        for start in range(0, len(uncached), batch_size):
+            batch_idx = uncached[start : start + batch_size]
+            batch_crops = [crops[i] for i in batch_idx]
+
+            captions = backend.caption(batch_crops, task)
+            fields_and_counts = [_caption_to_fields(c) for c in captions]
+            from_retry = [False] * len(batch_idx)
+
+            if retry_task is not None:
+                retry_local = [i for i, (_, n) in enumerate(fields_and_counts) if n == 0]
+                if retry_local:
+                    retry_captions = backend.caption(
+                        [batch_crops[i] for i in retry_local], retry_task
+                    )
+                    for local_i, retry_caption in zip(retry_local, retry_captions):
+                        retry_fields, retry_n = _caption_to_fields(retry_caption)
+                        if retry_n > 0:
+                            fields_and_counts[local_i] = (retry_fields, retry_n)
+                            captions[local_i] = retry_caption
+                            from_retry[local_i] = True
+
+            for local_i, job_idx in enumerate(batch_idx):
+                fields, _ = fields_and_counts[local_i]
+                results[job_idx] = (fields, from_retry[local_i])
+                _save_cached_fields(
+                    cache_dir, hashes[job_idx], fields, captions[local_i], from_retry[local_i]
+                )
+
+    return [results[i] for i in range(len(crops))]
+
+
 # ---------------------------------------------------------------------------
 # Frame sampling
 # ---------------------------------------------------------------------------
@@ -226,7 +309,6 @@ class _CropJob:
     track_id: str
     frame_id: str
     crop: np.ndarray
-    crop_hash: str
     crop_quality: float
     occlusion: float
 
@@ -296,7 +378,6 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
     clip_tracks = ClipAssociatedTracks.model_validate_json(tracks_path.read_text())
 
     frame_paths, _ = load_clip_frame_index(clip_id, settings)
-    cache_dir = settings.resolve_path(settings.vlm.cache_dir)
 
     # Every track's box in every frame, so a crop's occlusion can be measured
     # against its neighbours rather than guessed.
@@ -340,7 +421,6 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
                     track_id=track.track_id,
                     frame_id=frame_id,
                     crop=crop,
-                    crop_hash=_crop_hash(crop),
                     crop_quality=_crop_quality(crop, settings),
                     occlusion=_overlap_fraction(raw_bbox, others),
                 )
@@ -353,50 +433,12 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
         len(jobs),
     )
 
-    # Cache lookup first — only crops that actually need the VLM go to the
-    # backend. Caption-derived fields and their provenance are cached; the
-    # geometric measurements are not, since they depend on boxes, not pixels.
-    results: dict[int, tuple[dict[str, str | None], bool]] = {}
-    uncached: list[int] = []
-    for idx, job in enumerate(jobs):
-        cached = _load_cached_fields(cache_dir, job.crop_hash)
-        if cached is not None:
-            results[idx] = cached
-        else:
-            uncached.append(idx)
-
-    if uncached:
-        backend = _load_backend(settings)
-        batch_size = settings.vlm.batch_size
-
-        for start in range(0, len(uncached), batch_size):
-            batch_idx = uncached[start : start + batch_size]
-            crops = [jobs[i].crop for i in batch_idx]
-
-            captions = backend.caption(crops, backend.PRIMARY_TASK)
-            fields_and_counts = [_caption_to_fields(c) for c in captions]
-            from_retry = [False] * len(batch_idx)
-
-            retry_idx = [i for i, (_, n) in enumerate(fields_and_counts) if n == 0]
-            if retry_idx:
-                retry_captions = backend.caption([crops[i] for i in retry_idx], backend.RETRY_TASK)
-                for local_i, retry_caption in zip(retry_idx, retry_captions):
-                    retry_fields, retry_n = _caption_to_fields(retry_caption)
-                    if retry_n > 0:
-                        fields_and_counts[local_i] = (retry_fields, retry_n)
-                        captions[local_i] = retry_caption
-                        from_retry[local_i] = True
-
-            for local_i, job_idx in enumerate(batch_idx):
-                fields, _ = fields_and_counts[local_i]
-                results[job_idx] = (fields, from_retry[local_i])
-                _save_cached_fields(
-                    cache_dir,
-                    jobs[job_idx].crop_hash,
-                    fields,
-                    captions[local_i],
-                    from_retry[local_i],
-                )
+    # Caption-derived fields and their provenance are cached; the geometric
+    # measurements are not, since they depend on boxes rather than pixels.
+    standard_task, high_detail_task = get_tasks(settings)
+    results = caption_crops_to_fields(
+        [job.crop for job in jobs], settings, task=standard_task, retry_task=high_detail_task
+    )
 
     attributes = []
     for idx, job in enumerate(jobs):
@@ -420,12 +462,10 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
     output_path = output_dir / f"{clip_id}.json"
     output_path.write_text(clip_attributes.model_dump_json(indent=2))
 
-    n_cache_hits = len(jobs) - len(uncached)
     logger.info(
-        "extract_clip_attributes: clip_id=%s wrote %d frame-attributes (%d cache hits) -> %s",
+        "extract_clip_attributes: clip_id=%s wrote %d frame-attributes -> %s",
         clip_id,
         len(attributes),
-        n_cache_hits,
         output_path,
     )
 

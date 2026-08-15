@@ -70,8 +70,21 @@ def _vote_on_attribute(
     attribute: str,
     observations: list[FrameAttributes],
     settings: PipelineSettings,
+    *,
+    min_evidence_count: int | None = None,
+    margin_threshold: float | None = None,
 ) -> tuple[VoteDistribution, int]:
-    """Returns the vote distribution plus how many raw values normalization changed."""
+    """Returns the vote distribution plus how many raw values normalization changed.
+
+    The two thresholds default to the M6 config but are overridable, because
+    M8 votes over only its three best shots: M6's "at least 3 observations"
+    rule encodes "many frames agreed", which is the wrong question to ask of a
+    deliberately tiny, deliberately high-quality sample.
+    """
+    if min_evidence_count is None:
+        min_evidence_count = settings.voting.min_evidence_count
+    if margin_threshold is None:
+        margin_threshold = settings.voting.confidence_margin_threshold
     tally: dict[str, float] = defaultdict(float)
     n_votes = 0
     n_normalized = 0
@@ -112,9 +125,9 @@ def _vote_on_attribute(
     winner = ranked[0][0]
 
     uncertain_reason = None
-    if n_votes < settings.voting.min_evidence_count:
+    if n_votes < min_evidence_count:
         uncertain_reason = "insufficient_evidence"
-    elif margin < settings.voting.confidence_margin_threshold:
+    elif margin < margin_threshold:
         uncertain_reason = "low_margin"
 
     return (

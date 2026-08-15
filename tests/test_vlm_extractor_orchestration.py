@@ -29,8 +29,7 @@ class FakeBackend:
 
     def __init__(self):
         self.calls: list[tuple[int, str]] = []  # (n_crops, task)
-        self.PRIMARY_TASK = "<DETAILED_CAPTION>"
-        self.RETRY_TASK = "<MORE_DETAILED_CAPTION>"
+        self.PRIMARY_TASK, self.RETRY_TASK = vlm_extractor.BACKEND_TASKS["florence2"]
 
     def caption(self, crops_bgr, task):
         self.calls.append((len(crops_bgr), task))

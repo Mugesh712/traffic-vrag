@@ -75,8 +75,16 @@ def test_crop_hash_is_stable_and_content_sensitive():
     crop_a_copy = np.zeros((10, 10, 3), dtype=np.uint8)
     crop_b = np.ones((10, 10, 3), dtype=np.uint8)
 
-    assert _crop_hash(crop_a) == _crop_hash(crop_a_copy)
-    assert _crop_hash(crop_a) != _crop_hash(crop_b)
+    assert _crop_hash(crop_a, "<CAPTION>") == _crop_hash(crop_a_copy, "<CAPTION>")
+    assert _crop_hash(crop_a, "<CAPTION>") != _crop_hash(crop_b, "<CAPTION>")
+
+
+def test_crop_hash_separates_tasks():
+    """M8 asks for a high-detail caption of crops M5 may already have cached
+    under the standard task; without the task in the key it would silently be
+    served the wrong, less detailed result."""
+    crop = np.zeros((10, 10, 3), dtype=np.uint8)
+    assert _crop_hash(crop, "<DETAILED_CAPTION>") != _crop_hash(crop, "<MORE_DETAILED_CAPTION>")
 
 
 def test_cache_round_trip(tmp_path):

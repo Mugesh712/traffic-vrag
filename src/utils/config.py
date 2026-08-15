@@ -116,6 +116,25 @@ class LinkingConfig(BaseModel):
     score_weights: LinkingScoreWeights = LinkingScoreWeights()
 
 
+class ConfirmationConfig(BaseModel):
+    """M8 global best-shot confirmation."""
+
+    top_k: int = 3  # best shots re-read with the high-detail prompt
+    quality_reference_size_px: float = 128.0
+    quality_reference_sharpness: float = 200.0
+    # Viewpoint preference, as a blend: 0.0 disables it entirely, 1.0 scores
+    # purely on frontality. A proxy from aspect ratio, not a real viewpoint
+    # classifier -- M16 should check whether it earns its weight.
+    viewpoint_weight: float = 0.5
+    frontal_aspect_ratio: float = 1.2  # w/h at or below this reads as frontal
+    side_aspect_ratio: float = 2.2  # at or above this reads as side-on
+    # A tiny, deliberately high-quality sample: one excellent crop is evidence.
+    min_evidence_count: int = 1
+    confidence_margin_threshold: float = 0.15
+    confidence_boost: float = 0.1  # applied when best shot agrees
+    disagreement_penalty: float = 0.2  # applied when clip-level overrules best shot
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -141,6 +160,7 @@ class PipelineSettings(BaseSettings):
     vlm: VLMConfig = VLMConfig()
     voting: VotingConfig = VotingConfig()
     linking: LinkingConfig = LinkingConfig()
+    confirmation: ConfirmationConfig = ConfirmationConfig()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:
