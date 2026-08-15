@@ -101,12 +101,19 @@ ATTRIBUTE_VOCABS: dict[str, dict[str, list[str]]] = {
 ATTRIBUTES: tuple[str, ...] = ("color", "vehicle_type", "make", "model", "direction")
 
 
-def match_vocab(text: str, vocab: dict[str, list[str]]) -> str | None:
-    """First canonical value whose surface form appears in `text`, or None."""
+def match_vocab(text: str, vocab: dict[str, list[str]], allow_plural: bool = False) -> str | None:
+    """First canonical value whose surface form appears in `text`, or None.
+
+    `allow_plural` also accepts a trailing "s"/"es". Off by default because
+    M5 reads VLM captions, which describe one crop and say "a white sedan";
+    M12 reads user questions, which say "show me white sedans" and would
+    otherwise match nothing at all.
+    """
     lowered = text.lower()
+    suffix = r"(?:e?s)?" if allow_plural else ""
     for canonical, surface_forms in vocab.items():
         for phrase in surface_forms:
-            if re.search(rf"\b{re.escape(phrase)}\b", lowered):
+            if re.search(rf"\b{re.escape(phrase)}{suffix}\b", lowered):
                 return canonical
     return None
 

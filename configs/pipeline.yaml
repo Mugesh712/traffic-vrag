@@ -136,6 +136,21 @@ vector_store:
   object_collection: object_timelines
   event_collection: events
 
+retrieval:
+  # M12 hybrid retrieval.
+  top_k: 5
+  vector_candidates: 20
+  graph_limit: 50
+  rrf_k: 60                  # Reciprocal Rank Fusion constant
+  reasoning_widen_factor: 2  # counterfactual/forecast need context, not one best match
+  intent_backend: rules      # "rules" | "llm" (M13 supplies the LLM backend)
+
+retrieval_weights:
+  # All three terms are normalized to [0,1] before weighting.
+  vector: 0.5        # graded semantic relevance
+  graph: 0.35        # exact constraint satisfaction, authoritative
+  confidence: 0.15   # the system's own certainty in the matched attributes
+
 logging:
   level: INFO
   log_dir: data/outputs/logs

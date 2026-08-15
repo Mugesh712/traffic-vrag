@@ -277,6 +277,87 @@ class FinalObjectIndex(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# M12 — Query understanding & hybrid retrieval
+# ---------------------------------------------------------------------------
+
+QuestionType = Literal["factual", "counting", "counterfactual", "forecast"]
+
+
+class TimeRange(BaseModel):
+    """Time-of-day bounds, "HH:MM:SS". Deliberately not full timestamps: demo
+    questions say "before 12:05", not "before 2026-08-15T12:05". Single-day
+    footage is assumed; a multi-day corpus would need full ISO bounds."""
+
+    after: Optional[str] = None
+    before: Optional[str] = None
+
+    def is_empty(self) -> bool:
+        return self.after is None and self.before is None
+
+
+class QueryIntent(BaseModel):
+    question: str
+    question_type: QuestionType = "factual"
+    # Attribute name -> canonical value, drawn from the same closed vocabulary
+    # the knowledge graph stores, so a parsed value is always a queryable one.
+    target_attributes: dict[str, str] = Field(default_factory=dict)
+    object_classes: list[str] = Field(default_factory=list)
+    event_types: list[str] = Field(default_factory=list)
+    relations: list[str] = Field(default_factory=list)  # pairwise event types
+    region_ids: list[str] = Field(default_factory=list)
+    time_range: TimeRange = Field(default_factory=TimeRange)
+    # For a relational question ("which white car overtook a BLUE TRUCK"),
+    # terms after the relation verb describe the other party, not the subject.
+    # Folding them into target_attributes would search for a white truck.
+    counterpart_attributes: dict[str, str] = Field(default_factory=dict)
+    counterpart_classes: list[str] = Field(default_factory=list)
+
+    def has_structured_constraints(self) -> bool:
+        return bool(
+            self.target_attributes
+            or self.object_classes
+            or self.event_types
+            or self.region_ids
+            or not self.time_range.is_empty()
+        )
+
+
+class RetrievedObject(BaseModel):
+    global_id: str
+    cls: str = Field(alias="class")
+    score: float = 0.0
+    # Which retrievers produced this object: "vector", "graph", or both.
+    sources: list[str] = Field(default_factory=list)
+    vector_rank: Optional[int] = None
+    vector_distance: Optional[float] = None
+    graph_matched: bool = False
+    matched_confidence: float = 0.0
+    timeline_summary: str = ""
+    attributes: list[dict] = Field(default_factory=list)
+    events: list[dict] = Field(default_factory=list)
+    clips: list[str] = Field(default_factory=list)
+    evidence_frames: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class RetrievalResult(BaseModel):
+    """Structured, not a string blob: M13 needs the parts addressable."""
+
+    question: str
+    video_id: str
+    intent: QueryIntent
+    objects: list[RetrievedObject] = Field(default_factory=list)
+    events: list[dict] = Field(default_factory=list)
+    # Set only for counting questions, where a top-K similarity list is the
+    # wrong answer shape entirely.
+    count: Optional[int] = None
+    count_breakdown: list[dict] = Field(default_factory=list)
+    cypher_queries: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # M9 — Events
 # ---------------------------------------------------------------------------
 

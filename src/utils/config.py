@@ -176,6 +176,31 @@ class VectorStoreConfig(BaseModel):
     event_collection: str = "events"
 
 
+class RetrievalWeights(BaseModel):
+    """Fusion weights. All three terms are normalized to [0,1] before
+    weighting, so these are directly interpretable against each other."""
+
+    vector: float = 0.5  # graded semantic relevance
+    graph: float = 0.35  # exact constraint satisfaction, authoritative
+    confidence: float = 0.15  # the system's own certainty in matched attributes
+
+
+class RetrievalConfig(BaseModel):
+    """M12 hybrid retrieval."""
+
+    top_k: int = 5
+    vector_candidates: int = 20
+    graph_limit: int = 50
+    # Reciprocal Rank Fusion constant. Rank-based fusion needs no score
+    # calibration between vector distance and graph membership, which are not
+    # on a common scale.
+    rrf_k: int = 60
+    # Counterfactual and forecast questions need surrounding context to reason
+    # over, not the single best match, so their result set is widened.
+    reasoning_widen_factor: int = 2
+    intent_backend: str = "rules"  # "rules" | "llm" (M13 supplies the LLM one)
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -205,6 +230,8 @@ class PipelineSettings(BaseSettings):
     events: EventsConfig = EventsConfig()
     neo4j: Neo4jConfig = Neo4jConfig()
     vector_store: VectorStoreConfig = VectorStoreConfig()
+    retrieval: RetrievalConfig = RetrievalConfig()
+    retrieval_weights: RetrievalWeights = RetrievalWeights()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:

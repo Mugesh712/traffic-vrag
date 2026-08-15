@@ -196,6 +196,45 @@ def index(
 
 
 @app.command()
+def query(
+    video_id: str = typer.Argument(..., help="Video ID to query."),
+    question: str = typer.Argument(..., help="Natural-language question."),
+    show_cypher: bool = typer.Option(False, "--show-cypher", help="Print the templated Cypher used."),
+) -> None:
+    """Answer a question with hybrid vector + graph retrieval (M12)."""
+    from src.retrieval.hybrid_retriever import hybrid_retrieve
+
+    settings = get_settings()
+    result = hybrid_retrieve(question, video_id, settings=settings)
+
+    for warning in result.warnings:
+        typer.echo(f"warning: {warning}")
+
+    typer.echo(f"intent: {result.intent.question_type}", err=False)
+    if result.intent.target_attributes:
+        typer.echo(f"  attributes: {result.intent.target_attributes}")
+    if result.intent.event_types:
+        typer.echo(f"  events: {result.intent.event_types}")
+    if not result.intent.time_range.is_empty():
+        typer.echo(f"  time: {result.intent.time_range.after} .. {result.intent.time_range.before}")
+
+    if result.count is not None:
+        typer.echo(f"\ncount: {result.count}")
+        for row in result.count_breakdown:
+            typer.echo(f"  {row}")
+
+    typer.echo(f"\n{len(result.objects)} object(s):")
+    for obj in result.objects:
+        typer.echo(
+            f"  {obj.global_id}  score={obj.score:.3f}  via={'+'.join(obj.sources)}  {obj.timeline_summary}"
+        )
+
+    if show_cypher:
+        for cypher in result.cypher_queries:
+            typer.echo(f"\n--- cypher ---\n{cypher}")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind the API server to."),
     port: int = typer.Option(8000, help="Port to bind the API server to."),
