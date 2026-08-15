@@ -28,7 +28,13 @@ detect:
 
 track:
   tracker: bytetrack
+  track_activation_threshold: 0.25
+  lost_track_buffer_frames: 30
+  minimum_matching_threshold: 0.8
+  minimum_consecutive_frames: 1
   reid_model: osnet_x0_25
+  reid_device: auto
+  embedding_ema_alpha: 0.9
   embedding_top_k: 5
 
 association:

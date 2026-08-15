@@ -39,7 +39,13 @@ class DetectConfig(BaseModel):
 
 class TrackConfig(BaseModel):
     tracker: str = "bytetrack"
+    track_activation_threshold: float = 0.25
+    lost_track_buffer_frames: int = 30
+    minimum_matching_threshold: float = 0.8
+    minimum_consecutive_frames: int = 1
     reid_model: str = "osnet_x0_25"
+    reid_device: str = "auto"
+    embedding_ema_alpha: float = 0.9
     embedding_top_k: int = 5
 
 

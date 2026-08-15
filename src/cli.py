@@ -72,9 +72,11 @@ def track(
     clip_id: str = typer.Argument(..., help="Clip ID to run tracking on."),
 ) -> None:
     """Run multi-object tracking with ReID on a clip's detections (M3)."""
+    from src.perception.tracker import track_clip
+
     settings = get_settings()
-    logger.info("track: clip_id=%s tracker=%s", clip_id, settings.track.tracker)
-    raise NotImplementedError("M3: src/perception/tracker.py not implemented yet")
+    clip_tracks = track_clip(clip_id, settings=settings)
+    typer.echo(f"Tracked {len(clip_tracks.tracks)} objects in {clip_id}")
 
 
 @app.command()

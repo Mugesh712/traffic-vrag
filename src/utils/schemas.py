@@ -79,9 +79,10 @@ class Track(BaseModel):
     frames: list[str] = Field(default_factory=list)
     bboxes: list[tuple[float, float, float, float]] = Field(default_factory=list)
     centers: list[tuple[float, float]] = Field(default_factory=list)
-    velocity: list[tuple[float, float]] = Field(default_factory=list)
-    embedding: list[float] = Field(default_factory=list)
-    best_shot_crops: list[str] = Field(default_factory=list)
+    velocity: list[tuple[float, float]] = Field(default_factory=list)  # px/sec, aligned with frames
+    dominant_direction_deg: Optional[float] = None  # atan2(dy, dx) of net displacement, image coords
+    embedding: list[float] = Field(default_factory=list)  # rolling-average OSNet embedding, L2-normalized
+    best_shot_crops: list[str] = Field(default_factory=list)  # paths, highest quality first
 
     model_config = {"populate_by_name": True}
 
