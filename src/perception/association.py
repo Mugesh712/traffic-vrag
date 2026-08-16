@@ -207,9 +207,11 @@ def _evaluate_gates(
 
     # G4 APPEARANCE — the veto. Most expensive (512-d dot product) and least
     # trustworthy, so it runs last and only confirms what geometry proposed.
+    # The score is always recorded even when the gate is disabled, so an
+    # ablation can still report what appearance *would* have said.
     cosine = float(np.dot(a.embedding, b.embedding)) if a.embedding.size and b.embedding.size else 0.0
     scores["appearance"] = cosine
-    if cosine < cfg.appearance_similarity_threshold:
+    if cfg.enable_appearance_gate and cosine < cfg.appearance_similarity_threshold:
         return "appearance", scores
 
     return None, scores

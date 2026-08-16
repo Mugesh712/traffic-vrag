@@ -53,6 +53,7 @@ association:
   stationary_iou_threshold: 0.3          # tau_iou, used for stationary pairs
   motion_tolerance: 2.5                  # max prediction error, in object diagonals
   velocity_window: 3                     # frames averaged for exit velocity
+  enable_appearance_gate: true           # M16 ablation switch
   score_weights:                         # ranking only; never admits a gated-out pair
     appearance: 0.5
     motion: 0.3
@@ -104,6 +105,7 @@ confirmation:
   confidence_margin_threshold: 0.15
   confidence_boost: 0.1             # best shot agrees with clip-level voting
   disagreement_penalty: 0.2         # clip-level overrules the best shot
+  enabled: true                     # M16 ablation switch (off = pre-M8 baseline)
 
 events:
   # M9 rule-based event detection. Thresholds are px/sec and seconds, applied

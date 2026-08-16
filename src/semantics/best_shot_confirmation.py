@@ -196,7 +196,10 @@ def confirm_video(video_id: str, settings: PipelineSettings | None = None) -> Fi
     for obj in master.objects:
         # --- 1. Best shots across ALL clips of this object ------------------
         candidates: list[_CropCandidate] = []
-        for sighting in obj.sightings:
+        # Ablation: with M8 disabled, no crops are gathered and no VLM pass
+        # runs, so every attribute falls through to M6's clip-level answer --
+        # exactly the pre-M8 baseline the ablation needs to compare against.
+        for sighting in obj.sightings if cfg.enabled else []:
             track = tracks_by_clip.get(sighting.clip_id, {}).get(sighting.track_id)
             if track is None:
                 continue

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "pipeline.yaml"
@@ -76,6 +76,10 @@ class AssociationConfig(BaseModel):
     stationary_iou_threshold: float = 0.3
     motion_tolerance: float = 2.5
     velocity_window: int = 3
+    # M16 ablation switch ("remove appearance gating from M4"). The gate's
+    # score is still computed and logged when disabled, so the ablation can
+    # report what it would have rejected.
+    enable_appearance_gate: bool = True
     score_weights: AssociationScoreWeights = AssociationScoreWeights()
 
 
@@ -147,6 +151,10 @@ class ConfirmationConfig(BaseModel):
     confidence_margin_threshold: float = 0.15
     confidence_boost: float = 0.1  # applied when best shot agrees
     disagreement_penalty: float = 0.2  # applied when clip-level overrules best shot
+    # M16 ablation switch ("remove best-shot confirmation from M8"). When off,
+    # objects keep M6's clip-level answers verbatim and the VLM is never
+    # re-run, which is exactly the pre-M8 baseline.
+    enabled: bool = True
 
 
 class EventsConfig(BaseModel):
@@ -253,17 +261,43 @@ class LoggingConfig(BaseModel):
     log_dir: str = "data/outputs/logs"
 
 
+class _YamlSettingsSource(PydanticBaseSettingsSource):
+    """Supplies configs/pipeline.yaml as a settings *source*.
+
+    This must be a source rather than init kwargs. pydantic-settings ranks
+    init kwargs ABOVE environment variables, so the previous
+    `PipelineSettings(**yaml_dict)` made YAML unconditionally win and env vars
+    silently do nothing -- including PIPELINE__NEO4J__PASSWORD, which this
+    file documents as the way to keep the password out of the repo. As a
+    source, YAML sits below env vars, so overrides actually override.
+    """
+
+    def get_field_value(self, field, field_name):  # pragma: no cover - unused hook
+        return None, field_name, False
+
+    def __call__(self) -> dict:
+        return _load_yaml(_active_config_path())
+
+
 class PipelineSettings(BaseSettings):
-    """Root settings object. Values are loaded from YAML and can be
-    overridden by environment variables prefixed with PIPELINE__ (e.g.
-    PIPELINE__DETECT__CONF_THRESHOLD=0.5), using pydantic-settings'
-    nested-delimiter convention.
+    """Root settings object.
+
+    Precedence, highest first: environment variables prefixed with PIPELINE__
+    (nested via `__`, e.g. PIPELINE__DETECT__CONF_THRESHOLD=0.5), then
+    configs/pipeline.yaml, then the defaults declared here.
     """
 
     model_config = SettingsConfigDict(
         env_prefix="PIPELINE__",
         env_nested_delimiter="__",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings
+    ):
+        # Earlier entries win. Env before YAML is the whole point of the fix.
+        return (init_settings, env_settings, dotenv_settings, _YamlSettingsSource(settings_cls), file_secret_settings)
 
     paths: PathsConfig = PathsConfig()
     ingest: IngestConfig = IngestConfig()
@@ -294,8 +328,27 @@ def _load_yaml(config_path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
+# Which YAML file the settings source should read. Module-level because
+# settings_customise_sources is a classmethod with no access to get_settings'
+# argument; get_settings sets it before constructing PipelineSettings.
+_CONFIG_PATH: Path = DEFAULT_CONFIG_PATH
+
+
+def _set_active_config_path(path: Path) -> None:
+    global _CONFIG_PATH
+    _CONFIG_PATH = path
+
+
+def _active_config_path() -> Path:
+    return _CONFIG_PATH
+
+
 @lru_cache(maxsize=1)
 def get_settings(config_path: str | Path = DEFAULT_CONFIG_PATH) -> PipelineSettings:
-    """Load and cache pipeline settings from YAML, with env var overrides."""
-    raw = _load_yaml(Path(config_path))
-    return PipelineSettings(**raw)
+    """Load and cache pipeline settings.
+
+    Environment variables (PIPELINE__SECTION__FIELD) override the YAML file;
+    the YAML file overrides the declared defaults.
+    """
+    _set_active_config_path(Path(config_path))
+    return PipelineSettings()

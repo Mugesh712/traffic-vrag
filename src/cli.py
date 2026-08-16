@@ -261,6 +261,36 @@ def ask(
 
 
 @app.command()
+def evaluate(
+    video_id: str = typer.Argument(..., help="Video ID to evaluate."),
+    write_template: bool = typer.Option(
+        False, "--write-template",
+        help="Emit a ground-truth annotation template pre-filled with detections, then exit.",
+    ),
+    overwrite: bool = typer.Option(False, help="Allow --write-template to replace an existing file."),
+) -> None:
+    """Run the evaluation harness and emit LaTeX-ready tables (M16)."""
+    from src.eval.ground_truth import write_annotation_template
+    from src.eval.report import render_text
+    from src.eval.runner import evaluate_video
+
+    settings = get_settings()
+
+    if write_template:
+        path = write_annotation_template(video_id, settings=settings, overwrite=overwrite)
+        typer.echo(
+            f"Wrote annotation template -> {path}\n"
+            "Correct the boxes and attributes by hand, delete the "
+            "REMOVE_THIS_KEY_ONCE_REVIEWED key, then re-run `evaluate`."
+        )
+        return
+
+    tables, latex_path = evaluate_video(video_id, settings=settings)
+    typer.echo(render_text(tables))
+    typer.echo(f"LaTeX tables -> {latex_path}")
+
+
+@app.command()
 def serve(
     host: str = typer.Option(None, help="Host to bind the API server to (default: configs/pipeline.yaml)."),
     port: int = typer.Option(None, help="Port to bind the API server to (default: configs/pipeline.yaml)."),
