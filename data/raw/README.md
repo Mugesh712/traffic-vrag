@@ -31,10 +31,24 @@ python -m src.cli index car_detection
 ```
 
 Findings from this run are documented in `configs/pipeline.yaml` and
-`src/utils/config.py` (the detector model default) — see git history for the
-full writeup. The open item **not yet resolved**: `ingest.frame_sample_interval_sec`
-at its roadmap-recommended default (1.0s) produces detections too sparse for
-M3's ByteTrack tracker to confirm any track at all (7 detections -> 0 tracks).
-A 0.16s interval fixes it (48 detections -> 8 tracks) but multiplies
-downstream VLM cost ~6x and isn't yet a considered default change -- pass
-`--frame-interval-sec 0.16` (or similar) until this is resolved properly.
+`src/utils/config.py` — see git history for the full writeup.
+
+**Sampling interval (resolved).** The 1.0s default produced 7 detections and
+*zero* tracks: ByteTrack needs a second consecutive hit to confirm a new
+identity, and at 1s spacing a moving car has already left matching range.
+Swept on this clip:
+
+| interval | frames | detections | tracks | VLM crops | detect (s) |
+|---|---|---|---|---|---|
+| 1.0 | 32 | 7 | **0** | 0 | 7 |
+| 0.5 | 63 | 14 | 4 | 4 | 8 |
+| 0.25 | 126 | 31 | 7 | 12 | 10 |
+| 0.16 | 189 | 48 | 8 | 24 | 13 |
+
+An earlier note here claimed denser sampling "multiplies VLM cost ~6x" as if
+it scaled with frame count. That was wrong: M5 caps crops at
+`frames_per_track` per track and M8 at `top_k` per object, so VLM cost tracks
+the number and length of *tracks*, and 6x the frames cost under 2x the
+detection time. The default is now **0.5s** — the working end of the roadmap's
+own 0.5-1s guidance. `reproduce.sh` uses 0.16s, which recovers roughly twice
+as many objects and is worth the extra crops for evaluation runs.

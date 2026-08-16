@@ -11,7 +11,12 @@ paths:
 
 ingest:
   clip_length_sec: 30
-  frame_sample_interval_sec: 1.0
+  # NOT 1.0: at that spacing ByteTrack confirms zero tracks and the pipeline
+  # silently yields nothing. Measured tracks by interval on a real clip --
+  # 1.0 -> 0, 0.5 -> 4, 0.25 -> 7, 0.16 -> 8. The roadmap recommends 0.5-1s;
+  # this is the working end of that range. See DetectConfig's sibling comment
+  # in src/utils/config.py for the full table and the VLM-cost reasoning.
+  frame_sample_interval_sec: 0.5
 
 detect:
   # nano/small underperform badly on real elevated/near-nadir traffic-camera

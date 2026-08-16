@@ -103,10 +103,13 @@ These are real and measured, not hypothetical:
   footage, COCO-trained YOLO under-detects badly (`yolo11n` 0/11 frames,
   `yolo11s` 1/11, `yolo11m` 5/11 on a hand-checked sample). Fine-tuning on an
   aerial vehicle dataset, or preferring oblique camera angles, is the fix.
-- **Sampling interval vs. tracker.** At the default 1.0s interval, ByteTrack
-  confirms zero tracks on sparse detections; `reproduce.sh` uses 0.16s. The
-  tradeoff against M5's VLM cost is an open decision — see
-  `data/raw/README.md`.
+- **Sampling interval is now 0.5s, not 1.0s** (resolved, was an open
+  decision). At 1.0s ByteTrack confirmed *zero* tracks and the pipeline
+  silently produced nothing. Measured tracks by interval on a real clip:
+  `1.0 → 0`, `0.5 → 4`, `0.25 → 7`, `0.16 → 8`. VLM cost turned out to scale
+  with track count, not frame count (M5 caps crops per track), so denser
+  sampling is far cheaper than it first appeared; `reproduce.sh` uses 0.16s to
+  recover more objects for evaluation.
 - **Cross-clip linking is unexercised** on the sample clip: every object
   appears in one clip, so M7 has nothing to link. Longer footage is needed to
   evaluate it.

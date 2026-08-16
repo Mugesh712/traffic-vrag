@@ -64,3 +64,14 @@ def test_unset_env_leaves_yaml_values_intact():
     settings = get_settings()
     assert settings.neo4j.password == "traffic-vrag"
     assert settings.association.enable_appearance_gate is True
+
+
+def test_frame_sampling_default_is_not_the_value_that_breaks_tracking():
+    """1.0s was the shipped default and produced ZERO tracks on real footage:
+    ByteTrack needs a second consecutive hit to confirm a new identity, and at
+    1s spacing a moving car is no longer in matching range. Measured tracks by
+    interval: 1.0 -> 0, 0.5 -> 4, 0.25 -> 7, 0.16 -> 8. Guard the default so
+    the pipeline cannot silently go back to yielding nothing."""
+    interval = get_settings().ingest.frame_sample_interval_sec
+    assert interval < 1.0, "1.0s sampling confirms zero tracks; see IngestConfig"
+    assert interval <= 0.5, "roadmap recommends 0.5-1s; 0.5 is its working end"

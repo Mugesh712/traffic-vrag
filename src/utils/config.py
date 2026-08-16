@@ -26,7 +26,22 @@ class PathsConfig(BaseModel):
 
 class IngestConfig(BaseModel):
     clip_length_sec: float = 30.0
-    frame_sample_interval_sec: float = 1.0
+    # 1.0s was the previous default and is BROKEN: ByteTrack confirms zero
+    # tracks at that spacing, so the whole pipeline silently produces nothing.
+    # Measured on the real car_detection clip (interval -> tracks / VLM crops /
+    # detect seconds):
+    #     1.0  -> 0 tracks,  0 crops,  7s   <- pipeline yields nothing
+    #     0.5  -> 4 tracks,  4 crops,  8s
+    #     0.25 -> 7 tracks, 12 crops, 10s
+    #     0.16 -> 8 tracks, 24 crops, 13s
+    # The roadmap recommends 0.5-1s; 0.5 is the working end of that same range,
+    # so this stays within its guidance rather than overriding it. VLM cost
+    # rises with the number and length of TRACKS, not with frame count directly
+    # (M5 caps crops per track at frames_per_track, M8 at top_k), which is why
+    # 6x the frames costs nowhere near 6x the wall time. Denser sampling
+    # recovers more real objects and is worth it for evaluation runs --
+    # scripts/reproduce.sh uses 0.16 for that reason.
+    frame_sample_interval_sec: float = 0.5
 
 
 class DetectConfig(BaseModel):
