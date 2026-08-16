@@ -193,6 +193,13 @@ class Neo4jConfig(BaseModel):
 class VectorStoreConfig(BaseModel):
     """M11 ChromaDB vector store."""
 
+    # "embedded" keeps Chroma in-process, persisting to persist_dir -- the
+    # right default for the CLI on a laptop, with no server to run. "http"
+    # talks to a standalone Chroma server, which is what docker-compose uses
+    # so the containerised API and any other client share one store.
+    mode: str = "embedded"
+    host: str = "localhost"
+    port: int = 8001
     persist_dir: str = "data/outputs/vector_store"
     object_collection: str = "object_timelines"
     event_collection: str = "events"

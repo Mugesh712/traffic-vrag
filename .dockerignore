@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.claude/
+
+# Model weights: downloaded at runtime into a mounted volume, not baked in.
+*.pt
+
+# Pipeline inputs/outputs are mounted as volumes, never copied into the image.
+data/
+frontend/node_modules/
+frontend/dist/
+notebooks/
+tests/
+docs/

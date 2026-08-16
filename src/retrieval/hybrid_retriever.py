@@ -101,11 +101,9 @@ def build_vector_filter(video_id: str, intent: QueryIntent) -> dict:
 def vector_search(
     video_id: str, intent: QueryIntent, settings: PipelineSettings
 ) -> list[dict]:
-    import chromadb
+    from src.retrieval.vector_store import get_chroma_client
 
-    client = chromadb.PersistentClient(
-        path=str(settings.resolve_path(settings.vector_store.persist_dir))
-    )
+    client = get_chroma_client(settings)
     try:
         collection = client.get_collection(settings.vector_store.object_collection)
     except Exception as exc:  # collection absent -> nothing indexed yet

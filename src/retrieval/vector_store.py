@@ -47,6 +47,29 @@ class VectorStoreError(RuntimeError):
     pass
 
 
+def get_chroma_client(settings: PipelineSettings):
+    """The one place a Chroma client is constructed.
+
+    Embedded and server modes expose the same collection API, so every caller
+    is mode-agnostic -- which is what lets docker-compose run a real chromadb
+    service without the pipeline code knowing or caring.
+    """
+    import chromadb
+
+    mode = settings.vector_store.mode
+    if mode == "embedded":
+        return chromadb.PersistentClient(
+            path=str(settings.resolve_path(settings.vector_store.persist_dir))
+        )
+    if mode == "http":
+        return chromadb.HttpClient(
+            host=settings.vector_store.host, port=settings.vector_store.port
+        )
+    raise VectorStoreError(
+        f"Unknown vector_store.mode: {mode!r} (expected 'embedded' or 'http')"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
@@ -270,9 +293,7 @@ def populate_vector_store(video_id: str, settings: PipelineSettings | None = Non
         event_docs.append(build_event_summary(event, objects_by_id))
         event_metas.append(build_event_metadata(video_id, event, objects_by_id))
 
-    import chromadb
-
-    client = chromadb.PersistentClient(path=str(settings.resolve_path(settings.vector_store.persist_dir)))
+    client = get_chroma_client(settings)
 
     object_collection = client.get_or_create_collection(settings.vector_store.object_collection)
     object_collection.delete(where={"video_id": video_id})

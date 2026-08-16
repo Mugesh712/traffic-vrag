@@ -138,6 +138,11 @@ neo4j:
 
 vector_store:
   # M11 ChromaDB vector store.
+  # "embedded" runs in-process (default, no server needed). docker-compose
+  # sets PIPELINE__VECTOR_STORE__MODE=http to use the chromadb service instead.
+  mode: embedded
+  host: localhost
+  port: 8001
   persist_dir: data/outputs/vector_store
   object_collection: object_timelines
   event_collection: events

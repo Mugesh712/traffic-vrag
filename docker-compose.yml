@@ -1,0 +1,114 @@
+# Full stack for the Traffic-VRAG demo.
+#
+# The roadmap lists neo4j / chromadb / api / frontend. `ollama` is added
+# because M13 answers every question through a local LLM -- without it the
+# /query endpoint returns an error and "runs end-to-end" would not be true.
+#
+#   docker compose up -d          # start everything
+#   docker compose logs -f api    # watch the pipeline
+#   ./scripts/reproduce.sh        # run a real video through it
+#
+# GPU: this file is CPU-only so it runs anywhere. On an NVIDIA host, build the
+# api image with the CUDA base (see Dockerfile) and add a `deploy.resources`
+# GPU reservation to the api and ollama services.
+
+services:
+  neo4j:
+    image: neo4j:5
+    environment:
+      # Override in a .env file rather than editing this line; the pipeline
+      # reads the same value via PIPELINE__NEO4J__PASSWORD below.
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-traffic-vrag}
+      NEO4J_server_memory_heap_max__size: 1G
+    ports:
+      - "7474:7474"   # browser
+      - "7687:7687"   # bolt
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      # cypher-shell rather than a port check: the bolt port opens before the
+      # database is ready to answer queries, so a port check races the loader.
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-traffic-vrag} 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v2/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${API_BASE_IMAGE:-python:3.9-slim}
+    ports:
+      - "8000:8000"
+    environment:
+      # Service hostnames replace the localhost defaults in configs/pipeline.yaml.
+      # These work because env vars outrank the YAML file (fixed in M16 -- they
+      # used to be silently ignored).
+      PIPELINE__NEO4J__URI: bolt://neo4j:7687
+      PIPELINE__NEO4J__PASSWORD: ${NEO4J_PASSWORD:-traffic-vrag}
+      PIPELINE__VECTOR_STORE__MODE: http
+      PIPELINE__VECTOR_STORE__HOST: chromadb
+      PIPELINE__VECTOR_STORE__PORT: "8000"
+      PIPELINE__ANSWER__HOST: http://ollama:11434
+      PIPELINE__ANSWER__MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+    volumes:
+      # Pipeline artefacts live on the host so they survive `compose down` and
+      # can be inspected/committed without entering a container.
+      - ./data:/app/data
+      - ./configs:/app/configs
+      # Model weights: ~1GB+ of downloads that must not repeat per rebuild.
+      - model_cache:/models
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      # Reached from the user's BROWSER, not from inside the compose network,
+      # so this is localhost rather than the `api` service name.
+      VITE_API_BASE_URL: http://localhost:8000
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      - api
+
+volumes:
+  neo4j_data:
+  chroma_data:
+  ollama_models:
+  model_cache:

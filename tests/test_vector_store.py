@@ -12,6 +12,9 @@ from src.retrieval.vector_store import (
     build_object_metadata,
     build_object_summary,
 )
+import pytest
+
+from src.utils.config import get_settings
 from src.utils.schemas import Event, FinalAttribute, GlobalObjectFinal, Sighting
 
 
@@ -235,3 +238,31 @@ def test_event_metadata_defaults_object_id_to_empty_string_not_none():
     meta = build_event_metadata("video_1", e, {"obj_1": obj("obj_1")})
     assert meta["object_id"] == ""
     assert all(v is not None for v in meta.values())
+
+
+# --- client mode selection (M17) --------------------------------------------
+
+
+def test_embedded_is_the_default_mode():
+    """The CLI on a laptop must work with no server running."""
+    assert get_settings().vector_store.mode == "embedded"
+
+
+def test_embedded_mode_returns_a_persistent_client(monkeypatch, tmp_path):
+    from src.retrieval.vector_store import get_chroma_client
+
+    settings = get_settings()
+    monkeypatch.setattr(settings.vector_store, "mode", "embedded")
+    monkeypatch.setattr(settings.vector_store, "persist_dir", str(tmp_path / "chroma"))
+    client = get_chroma_client(settings)
+    assert client.__class__.__name__ in ("Client", "PersistentClient", "ClientCreator")
+
+
+def test_unknown_mode_is_a_clear_error(monkeypatch):
+    """A typo in the mode must fail loudly, not fall through to a default."""
+    from src.retrieval.vector_store import VectorStoreError, get_chroma_client
+
+    settings = get_settings()
+    monkeypatch.setattr(settings.vector_store, "mode", "sqlite")
+    with pytest.raises(VectorStoreError, match="Unknown vector_store.mode"):
+        get_chroma_client(settings)
