@@ -262,12 +262,17 @@ def ask(
 
 @app.command()
 def serve(
-    host: str = typer.Option("0.0.0.0", help="Host to bind the API server to."),
-    port: int = typer.Option(8000, help="Port to bind the API server to."),
+    host: str = typer.Option(None, help="Host to bind the API server to (default: configs/pipeline.yaml)."),
+    port: int = typer.Option(None, help="Port to bind the API server to (default: configs/pipeline.yaml)."),
 ) -> None:
     """Start the FastAPI backend (M14)."""
+    import uvicorn
+
+    settings = get_settings()
+    host = host or settings.api.host
+    port = port or settings.api.port
     logger.info("serve: host=%s port=%s", host, port)
-    raise NotImplementedError("M14: src/api/main.py not implemented yet")
+    uvicorn.run("src.api.main:app", host=host, port=port)
 
 
 if __name__ == "__main__":

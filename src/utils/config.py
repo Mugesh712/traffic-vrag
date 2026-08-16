@@ -216,6 +216,24 @@ class AnswerConfig(BaseModel):
     max_events_per_object: int = 5
 
 
+class ApiConfig(BaseModel):
+    """M14 FastAPI backend."""
+
+    host: str = "0.0.0.0"
+    port: int = 8000
+    db_path: str = "data/outputs/jobs.db"
+    # Explicit dev-server origins, never "*" -- CORS with allow_credentials=True
+    # and a wildcard origin is a real vulnerability (any site can then read
+    # authenticated responses), so the two must never be combined.
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
+    max_upload_mb: int = 2048
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     log_dir: str = "data/outputs/logs"
@@ -248,6 +266,7 @@ class PipelineSettings(BaseSettings):
     retrieval: RetrievalConfig = RetrievalConfig()
     retrieval_weights: RetrievalWeights = RetrievalWeights()
     answer: AnswerConfig = AnswerConfig()
+    api: ApiConfig = ApiConfig()
     logging: LoggingConfig = LoggingConfig()
 
     def resolve_path(self, relative: str) -> Path:
