@@ -218,3 +218,31 @@ def test_unavailable_table_states_the_reason_in_latex():
     assert "Not available" in latex
     assert "no annotation" in latex
     assert "\\toprule" not in latex  # no empty table body pretending to be data
+
+
+def test_box_only_ground_truth_does_not_report_zero_attribute_accuracy(fixture):
+    """MOT-format benchmarks annotate tracks but no attribute values. Rendering
+    that as 0.0 precision would state a measurement ("it got none right") where
+    the truth is "nothing was scored" -- the same failure the missing-GT tables
+    guard against, one level finer."""
+    settings, gt_path, _ = fixture
+    box = [0.0, 0.0, 10.0, 10.0]
+    gt_path.parent.mkdir(parents=True, exist_ok=True)
+    gt_path.write_text(json.dumps({
+        "video_id": VIDEO_ID,
+        "tracks": [{"gt_id": "gt_1", "class": "car",
+                    "boxes": {"f0": box, "f1": box, "f2": box}}],
+        # Boxes annotated, attributes left null -- exactly what an imported
+        # MOT benchmark looks like.
+        "attributes": [{"gt_id": "gt_1", "color": None, "vehicle_type": None,
+                        "make": None, "model": None}],
+    }))
+
+    tables, _ = evaluate_video(VIDEO_ID, settings=settings)
+    accuracy = table_by_label(tables, "tab:attr-accuracy")
+    assert accuracy.unavailable_reason is not None
+    assert accuracy.rows == []
+
+    # Tracking still scores normally: boxes ARE annotated.
+    tracking = table_by_label(tables, "tab:tracking")
+    assert tracking.unavailable_reason is None

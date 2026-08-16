@@ -95,6 +95,22 @@ Both emit a template that must be corrected by hand; the loader refuses a file
 still carrying its unreviewed marker, because scoring the system against its
 own proposals would report ~100% and mean nothing.
 
+**Faster route — import a benchmark's own labels.** Public tracking datasets
+already ship human annotations, so the tracking tables need no manual boxing
+at all:
+
+```bash
+.venv/bin/python -m src.cli import-gt <video_id> path/to/gt.txt --format mot
+.venv/bin/python -m src.cli import-gt <video_id> path/to/MVI_20011.xml --format detrac
+```
+
+The importer intersects annotations with the frames M1 actually sampled and
+reports what it dropped. This matters: benchmarks label *every* video frame,
+so importing them wholesale would score each unsampled frame as a miss and
+make MOTA measure the sampling rate rather than the tracker. UA-DETRAC XML
+also carries `vehicle_type`, which seeds part of the attribute ground truth —
+leaving colour as the main thing still needing a human.
+
 ## Known limitations
 
 These are real and measured, not hypothetical:
@@ -120,5 +136,5 @@ These are real and measured, not hypothetical:
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q     # 337 tests
+.venv/bin/python -m pytest tests/ -q     # 353 tests
 ```

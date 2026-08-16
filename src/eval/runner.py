@@ -222,12 +222,23 @@ def build_tables(
                   else "M8 output missing; run `confirm` first.")
         )
     else:
-        rows = [r.as_row() for r in evaluate_attribute_accuracy(outputs.final, ground_truth, gt_id_by_global)]
+        accuracy = evaluate_attribute_accuracy(outputs.final, ground_truth, gt_id_by_global)
+        # Ground truth can exist for BOXES while carrying no attribute labels --
+        # MOT-format benchmarks annotate tracks only. Every attribute is then
+        # unscorable, and rendering that as 0.0 precision would state a
+        # measurement ("it got none right") where the truth is "nothing was
+        # scored". Same principle as a missing-GT table, one level finer.
+        scorable = sum(r.answered + r.abstained for r in accuracy)
         tables.append(
             Table(caption="Attribute accuracy (abstentions counted separately from errors)",
                   label="tab:attr-accuracy",
                   columns=["Attribute", "Correct", "Wrong", "Abstained", "Precision", "Coverage"],
-                  rows=rows)
+                  rows=[r.as_row() for r in accuracy] if scorable else [],
+                  unavailable_reason=(
+                      "the ground truth annotates boxes but no attribute values "
+                      "(MOT-format benchmarks label tracks only). Fill in colour/type "
+                      "in data/ground_truth/ to score these."
+                  ) if not scorable else None)
         )
 
     # --- Attribute consistency (no GT needed) -------------------------------

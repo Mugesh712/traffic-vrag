@@ -311,6 +311,31 @@ def evaluate(
     typer.echo(f"LaTeX tables -> {latex_path}")
 
 
+@app.command(name="import-gt")
+def import_gt(
+    video_id: str = typer.Argument(..., help="Video ID the annotations belong to."),
+    source: str = typer.Argument(..., help="Path to the annotation file (MOT gt.txt or UA-DETRAC XML)."),
+    fmt: str = typer.Option("mot", "--format", help="Source format: 'mot' or 'detrac'."),
+    frame_offset: int = typer.Option(
+        -1, help="Added to source frame numbers to reach this pipeline's 0-based index."
+    ),
+    overwrite: bool = typer.Option(False, help="Replace an existing ground-truth file."),
+) -> None:
+    """Convert benchmark annotations into ground truth (M16)."""
+    from src.eval.import_gt import import_ground_truth
+
+    settings = get_settings()
+    report = import_ground_truth(
+        video_id, source, fmt, settings=settings, frame_offset=frame_offset, overwrite=overwrite
+    )
+    typer.echo(report.summary())
+    if report.n_tracks == 0:
+        typer.echo(
+            "\nNothing survived frame alignment. The most likely cause is a frame-index "
+            "mismatch: try --frame-offset 0 if the source counts from zero."
+        )
+
+
 @app.command()
 def serve(
     host: str = typer.Option(None, help="Host to bind the API server to (default: configs/pipeline.yaml)."),
