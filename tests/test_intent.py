@@ -27,6 +27,34 @@ def test_question_type_classification(question, expected):
     assert intent(question).question_type == expected
 
 
+@pytest.mark.parametrize("question", [
+    "What was the licence plate number of the red car?",
+    "What is the serial number of the bus?",
+    "What is the model number of that van?",
+])
+def test_identification_questions_are_not_mistaken_for_counting(question):
+    """Found by the M16 QA benchmark: the bare marker "number of" fires inside
+    "plate number of", routing an unanswerable identification question to the
+    deterministic counting path -- which asserts a count instead of declining,
+    and scored the system BELOW the baselines on abstention."""
+    assert intent(question).question_type == "factual"
+
+
+@pytest.mark.parametrize("question", [
+    "How many cars are there?",
+    "What is the number of cars?",
+    "Total number of vehicles?",
+    "How often did a car stop?",
+])
+def test_genuine_counting_questions_still_classify_as_counting(question):
+    assert intent(question).question_type == "counting"
+
+
+def test_markers_match_on_word_boundaries():
+    """"count" must not fire inside "account"/"discount"."""
+    assert intent("Which car has the largest discount sticker?").question_type == "factual"
+
+
 def test_counting_wins_over_counterfactual_phrasing():
     """"How many would have stopped" is still a counting question -- answering
     it with a top-K similarity list would be the wrong answer shape."""

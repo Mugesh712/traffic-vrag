@@ -1,0 +1,59 @@
+{
+  "video_id": "car_detection",
+  "items": [
+    {
+      "question_id": "q1",
+      "question": "How many buses are in the video?",
+      "question_type": "counting",
+      "expected_count": 0,
+      "expected_gt_ids": [],
+      "answerable": true,
+      "notes": "Verified by eye across all 32 sampled frames: no buses appear."
+    },
+    {
+      "question_id": "q2",
+      "question": "How many pedestrians are in the video?",
+      "question_type": "counting",
+      "expected_count": 0,
+      "expected_gt_ids": [],
+      "answerable": true,
+      "notes": "Verified by eye: the clip is vehicles-only, no people on foot."
+    },
+    {
+      "question_id": "q3",
+      "question": "What was the licence plate number of the red car?",
+      "question_type": "factual",
+      "expected_count": null,
+      "expected_gt_ids": [],
+      "answerable": false,
+      "notes": "Plates are unreadable at this resolution; declining is correct."
+    },
+    {
+      "question_id": "q4",
+      "question": "What is the weather like in this video?",
+      "question_type": "factual",
+      "expected_count": null,
+      "expected_gt_ids": [],
+      "answerable": false,
+      "notes": "The pipeline models vehicles only; it has no weather evidence."
+    },
+    {
+      "question_id": "q5",
+      "question": "Which vehicles turned during the video?",
+      "question_type": "factual",
+      "expected_count": null,
+      "expected_gt_ids": [],
+      "answerable": true,
+      "notes": "Scored on groundedness; object-F1 needs ground truth."
+    },
+    {
+      "question_id": "q6",
+      "question": "Which vehicle is most likely to leave the frame next?",
+      "question_type": "forecast",
+      "expected_count": null,
+      "expected_gt_ids": [],
+      "answerable": true,
+      "notes": "Groundedness only, by design."
+    }
+  ]
+}

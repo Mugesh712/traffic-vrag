@@ -268,8 +268,114 @@ def build_tables(
     return tables
 
 
+def _gt_map_for_qa(outputs: PipelineOutputs, ground_truth: GroundTruth | None) -> dict[str, str]:
+    """global_id -> gt_id, or empty when there is no annotation to map to.
+
+    Object-F1 needs this bridge: the benchmark names objects by gt_id (what a
+    human annotated), while the system cites global_ids (what it inferred).
+    Without annotation the mapping is empty and object-F1 stays unscored.
+    """
+    if ground_truth is None or outputs.master is None:
+        return {}
+    return _match_globals_to_gt(
+        _gt_frames(ground_truth, outputs.manifest),
+        _frames_from_global_objects(outputs.master, outputs.associated, outputs.manifest),
+    )
+
+
+def run_qa_benchmark(
+    video_id: str,
+    benchmark,
+    settings: PipelineSettings,
+    gt_id_by_global_id: dict[str, str],
+    include_baselines: bool = True,
+) -> list[Table]:
+    """Run every benchmark question through our system and each baseline.
+
+    Imported lazily so the rest of the harness never requires a running LLM.
+    """
+    from src.eval.baselines import build_baselines
+    from src.eval.qa import aggregate, score_item
+    from src.retrieval.answer_generator import generate_answer
+    from src.retrieval.hybrid_retriever import hybrid_retrieve
+
+    per_system: dict[str, list] = {}
+    failures: list[str] = []
+
+    for item in benchmark.items:
+        try:
+            retrieval = hybrid_retrieve(item.question, video_id, settings=settings)
+            answer = generate_answer(retrieval, settings=settings)
+            per_system.setdefault("traffic_vrag", []).append(
+                score_item(
+                    item, "traffic_vrag", answer.answer, answer.supporting_object_ids,
+                    [o.global_id for o in retrieval.objects], gt_id_by_global_id,
+                )
+            )
+        except Exception as exc:
+            failures.append(f"traffic_vrag/{item.question_id}: {exc.__class__.__name__}: {exc}")
+
+    if include_baselines:
+        for baseline in build_baselines(settings):
+            for item in benchmark.items:
+                try:
+                    result = baseline.answer(video_id, item.question)
+                    per_system.setdefault(baseline.name, []).append(
+                        score_item(item, baseline.name, result.answer, result.cited_ids, [], None)
+                    )
+                except Exception as exc:
+                    failures.append(f"{baseline.name}/{item.question_id}: {exc.__class__.__name__}: {exc}")
+
+    tables: list[Table] = []
+    if per_system:
+        rows = []
+        for system, scores in sorted(per_system.items()):
+            summary = aggregate(scores)
+            rows.append({
+                "System": system,
+                "Questions": summary["n_questions"],
+                "Counting acc.": summary["counting_accuracy"] if summary["counting_accuracy"] is not None else "-",
+                "Object F1": summary["object_f1"] if summary["object_f1"] is not None else "-",
+                "Abstention acc.": summary["abstention_accuracy"] if summary["abstention_accuracy"] is not None else "-",
+                "Grounded": summary["grounded_rate"] if summary["grounded_rate"] is not None else "-",
+            })
+        tables.append(
+            Table(
+                caption=(
+                    "QA accuracy against baselines. Counterfactual and forecast questions "
+                    "are excluded from correctness scoring by design (no ground-truth answer "
+                    "exists); they contribute only to groundedness and abstention."
+                ),
+                label="tab:qa",
+                columns=["System", "Questions", "Counting acc.", "Object F1",
+                         "Abstention acc.", "Grounded"],
+                rows=rows,
+            )
+        )
+
+        detail_rows = [s.as_row() | {"System": system}
+                       for system, scores in sorted(per_system.items()) for s in scores]
+        tables.append(
+            Table(caption="QA per-question detail", label="tab:qa-detail",
+                  columns=["System", "Question", "Type", "Counting", "Object F1",
+                           "Abstention", "Grounded"],
+                  rows=detail_rows)
+        )
+
+    if failures:
+        logger.warning("run_qa_benchmark: %d question(s) failed: %s", len(failures), failures[:5])
+        tables.append(
+            Table(caption="QA runs that failed", label="tab:qa-failures",
+                  columns=["Failure"], rows=[{"Failure": f} for f in failures])
+        )
+    return tables
+
+
 def evaluate_video(
-    video_id: str, settings: PipelineSettings | None = None
+    video_id: str,
+    settings: PipelineSettings | None = None,
+    run_qa: bool = False,
+    include_baselines: bool = True,
 ) -> tuple[list[Table], Path]:
     settings = settings or get_settings()
     outputs = load_outputs(video_id, settings)
@@ -281,6 +387,37 @@ def evaluate_video(
         )
 
     tables = build_tables(outputs, ground_truth, settings)
+
+    from src.eval.qa import load_benchmark
+
+    benchmark = load_benchmark(video_id, settings)
+    if benchmark is None:
+        tables.append(
+            Table(caption="QA accuracy against baselines", label="tab:qa",
+                  columns=["System", "Questions", "Counting acc.", "Object F1",
+                           "Abstention acc.", "Grounded"],
+                  rows=[],
+                  unavailable_reason=(
+                      "no QA benchmark for this video. Create one with "
+                      "`evaluate <video_id> --write-qa-template`, fill in the expected "
+                      "answers by hand, then re-run with --run-qa."
+                  ))
+        )
+    elif not run_qa:
+        tables.append(
+            Table(caption="QA accuracy against baselines", label="tab:qa",
+                  columns=["System", "Questions", "Counting acc.", "Object F1",
+                           "Abstention acc.", "Grounded"],
+                  rows=[],
+                  unavailable_reason=(
+                      f"benchmark of {len(benchmark.items)} question(s) found but not run. "
+                      "Re-run with --run-qa (needs a live LLM and, for the full system, "
+                      "Neo4j + the vector store)."
+                  ))
+        )
+    else:
+        gt_map = _gt_map_for_qa(outputs, ground_truth)
+        tables.extend(run_qa_benchmark(video_id, benchmark, settings, gt_map, include_baselines))
 
     report_dir = settings.resolve_path(settings.paths.outputs_dir) / "eval"
     report_dir.mkdir(parents=True, exist_ok=True)

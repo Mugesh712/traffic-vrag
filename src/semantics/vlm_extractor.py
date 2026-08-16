@@ -235,6 +235,45 @@ def _save_cached_fields(
     )
 
 
+def caption_images(
+    images: list[np.ndarray], settings: PipelineSettings, *, task: str
+) -> list[str]:
+    """Raw caption text for each image, cached by (pixels, task).
+
+    M16's caption-RAG baseline needs the caption *prose*, not the attribute
+    fields caption_crops_to_fields() parses out of it -- the whole point of
+    that baseline is that it has nothing but unstructured text to retrieve
+    over. Shares the same on-disk cache, so a frame captioned for one purpose
+    is never re-captioned for the other.
+    """
+    cache_dir = settings.resolve_path(settings.vlm.cache_dir)
+    hashes = [_crop_hash(image, task) for image in images]
+
+    captions: dict[int, str] = {}
+    uncached: list[int] = []
+    for i, crop_hash in enumerate(hashes):
+        path = _cache_path(cache_dir, crop_hash)
+        if path.exists():
+            payload = json.loads(path.read_text())
+            if payload.get("caption"):
+                captions[i] = payload["caption"]
+                continue
+        uncached.append(i)
+
+    if uncached:
+        backend = _load_backend(settings)
+        batch_size = settings.vlm.batch_size
+        for start in range(0, len(uncached), batch_size):
+            batch = uncached[start : start + batch_size]
+            texts = backend.caption([images[i] for i in batch], task)
+            for idx, text in zip(batch, texts):
+                captions[idx] = text
+                fields, _ = _caption_to_fields(text)
+                _save_cached_fields(cache_dir, hashes[idx], fields, text, False)
+
+    return [captions[i] for i in range(len(images))]
+
+
 def caption_crops_to_fields(
     crops: list[np.ndarray],
     settings: PipelineSettings,

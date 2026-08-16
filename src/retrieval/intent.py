@@ -53,7 +53,16 @@ CLASS_PHRASES: dict[str, list[str]] = {
     "person": ["person", "people", "pedestrian", "pedestrians"],
 }
 
-COUNTING_MARKERS = ["how many", "count", "number of", "total number", "how much"]
+# Matched with word boundaries, and "number of" is deliberately NOT a marker on
+# its own: it fires inside "licence plate number of the red car" and "serial
+# number of the bus", routing an unanswerable identification question to the
+# deterministic counting path, which then asserts a count instead of declining.
+# Found by the M16 QA benchmark -- the system scored WORSE than the baselines
+# on abstention because of it. The qualified forms below cannot collide that way.
+COUNTING_MARKERS = [
+    "how many", "how much", "the number of", "total number", "count of",
+    "number of times", "how often",
+]
 COUNTERFACTUAL_MARKERS = ["what if", "would have", "had the", "if the", "instead of", "could have"]
 FORECAST_MARKERS = ["will ", "going to", "predict", "next", "about to", "likely to", "expect"]
 
@@ -64,15 +73,21 @@ class IntentParseError(RuntimeError):
     pass
 
 
+def _has_marker(text: str, markers: list[str]) -> bool:
+    """Word-boundary matching, so "count" does not fire inside "account" or
+    "discount" and "will " does not fire inside "willing"."""
+    return any(re.search(rf"\b{re.escape(m.strip())}\b", text) for m in markers)
+
+
 def _classify_question(text: str) -> QuestionType:
     """Counting is checked first: "how many cars would have stopped" is a
     counting question with counterfactual phrasing, and answering it with a
     top-K similarity list would be the wrong shape entirely."""
-    if any(marker in text for marker in COUNTING_MARKERS):
+    if _has_marker(text, COUNTING_MARKERS):
         return "counting"
-    if any(marker in text for marker in COUNTERFACTUAL_MARKERS):
+    if _has_marker(text, COUNTERFACTUAL_MARKERS):
         return "counterfactual"
-    if any(marker in text for marker in FORECAST_MARKERS):
+    if _has_marker(text, FORECAST_MARKERS):
         return "forecast"
     return "factual"
 

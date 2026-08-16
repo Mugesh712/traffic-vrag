@@ -267,10 +267,19 @@ def evaluate(
         False, "--write-template",
         help="Emit a ground-truth annotation template pre-filled with detections, then exit.",
     ),
-    overwrite: bool = typer.Option(False, help="Allow --write-template to replace an existing file."),
+    write_qa_template: bool = typer.Option(
+        False, "--write-qa-template", help="Emit a starter QA benchmark template, then exit."
+    ),
+    run_qa: bool = typer.Option(
+        False, "--run-qa",
+        help="Run the QA benchmark (needs a live LLM; add --no-baselines to skip the comparisons).",
+    ),
+    baselines: bool = typer.Option(True, help="Include the caption-RAG and frame-caption baselines."),
+    overwrite: bool = typer.Option(False, help="Allow a --write-*-template to replace an existing file."),
 ) -> None:
     """Run the evaluation harness and emit LaTeX-ready tables (M16)."""
     from src.eval.ground_truth import write_annotation_template
+    from src.eval.qa import write_benchmark_template
     from src.eval.report import render_text
     from src.eval.runner import evaluate_video
 
@@ -285,7 +294,19 @@ def evaluate(
         )
         return
 
-    tables, latex_path = evaluate_video(video_id, settings=settings)
+    if write_qa_template:
+        path = write_benchmark_template(video_id, settings=settings, overwrite=overwrite)
+        typer.echo(
+            f"Wrote QA benchmark template -> {path}\n"
+            "Replace the questions with ones about your footage, fill in the expected "
+            "answers by hand, delete the REMOVE_THIS_KEY_ONCE_REVIEWED key, then re-run "
+            "with --run-qa."
+        )
+        return
+
+    tables, latex_path = evaluate_video(
+        video_id, settings=settings, run_qa=run_qa, include_baselines=baselines
+    )
     typer.echo(render_text(tables))
     typer.echo(f"LaTeX tables -> {latex_path}")
 
