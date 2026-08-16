@@ -14,7 +14,11 @@ ingest:
   frame_sample_interval_sec: 1.0
 
 detect:
-  model_path: yolo11n.pt
+  # nano/small underperform badly on real elevated/near-nadir traffic-camera
+  # footage -- see the comment in src/utils/config.py's DetectConfig for the
+  # measured recall numbers (yolo11m still <50% frame recall; this is a known,
+  # unresolved viewpoint domain-gap, not a threshold-tuning issue).
+  model_path: yolo11m.pt
   conf_threshold: 0.25
   iou_threshold: 0.45
   classes:

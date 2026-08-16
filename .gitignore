@@ -8,6 +8,7 @@ data/frames/*
 data/crops/*
 data/outputs/*
 !data/raw/.gitkeep
+!data/raw/README.md
 !data/clips/.gitkeep
 !data/frames/.gitkeep
 !data/crops/.gitkeep

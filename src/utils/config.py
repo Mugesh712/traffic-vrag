@@ -30,7 +30,21 @@ class IngestConfig(BaseModel):
 
 
 class DetectConfig(BaseModel):
-    model_path: str = "yolo11n.pt"
+    # Measured recall on 11 manually-verified car-visible frames from a real
+    # CC-BY elevated/near-nadir traffic-camera clip, conf=0.25:
+    #   yolo11n  0/11 frames hit  (top guess for the visible car, unrestricted,
+    #                              was "cell phone" at 0.93; "car" scored 0.014)
+    #   yolo11s  1/11 frames hit
+    #   yolo11m  5/11 frames hit  <- best available tradeoff, still <50% recall
+    # COCO's "car" class is trained overwhelmingly on ground-level/oblique
+    # views; a near-nadir overhead angle is out of distribution, and model
+    # capacity is what recovers it, not confidence threshold (lowering conf
+    # to 0.15 did not change nano's or medium's hit count). This is a real,
+    # unresolved limitation, not fully fixed by picking a bigger stock model --
+    # worth documenting as future work (fine-tuning on an aerial-vehicle
+    # dataset such as VisDrone/UAVDT, or preferring more oblique camera
+    # angles when choosing M16's benchmark footage).
+    model_path: str = "yolo11m.pt"
     conf_threshold: float = 0.25
     iou_threshold: float = 0.45
     classes: list[str] = ["car", "truck", "bus", "motorcycle", "bicycle", "person"]
