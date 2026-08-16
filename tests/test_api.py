@@ -160,6 +160,47 @@ def test_object_detail_before_confirm_stage_is_409(client):
     assert response.status_code == 409
 
 
+def test_object_list_returns_all_objects_for_the_job(client):
+    settings = get_settings()
+    store = api_main.get_store()
+    job = store.create_job(video_path="/tmp/x.mp4")
+    store.set_video_id(job.job_id, VIDEO_ID)
+    outputs = settings.resolve_path(settings.paths.outputs_dir)
+    (outputs / "global_objects_final").mkdir(parents=True, exist_ok=True)
+    (outputs / "global_objects_final" / f"{VIDEO_ID}.json").write_text(
+        json.dumps(
+            {
+                "video_id": VIDEO_ID,
+                "objects": [
+                    {"global_id": "obj_0001", "class": "car", "sightings": [],
+                     "attributes": [{"attribute": "color", "value": "white", "confidence": 0.9,
+                                     "source": "agreed", "uncertain": False}],
+                     "best_shot_crops": []},
+                    {"global_id": "obj_0002", "class": "truck", "sightings": [],
+                     "attributes": [], "best_shot_crops": []},
+                ],
+                "correction_log": [],
+            }
+        )
+    )
+
+    response = client.get(f"/jobs/{job.job_id}/objects")
+    assert response.status_code == 200
+    body = response.json()
+    assert [o["global_id"] for o in body] == ["obj_0001", "obj_0002"]
+    # Summary form: no timeline/crops, unlike the single-object detail route.
+    assert "timeline" not in body[0]
+    assert "best_shot_crops" not in body[0]
+
+
+def test_object_list_before_confirm_stage_is_409(client):
+    store = api_main.get_store()
+    job = store.create_job(video_path="/tmp/x.mp4")
+    store.set_video_id(job.job_id, "video_with_no_output_file")
+    response = client.get(f"/jobs/{job.job_id}/objects")
+    assert response.status_code == 409
+
+
 def test_object_detail_returns_the_matching_object(client):
     settings = get_settings()
     store = api_main.get_store()

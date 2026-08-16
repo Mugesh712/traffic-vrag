@@ -149,25 +149,42 @@ def query(request: QueryRequest) -> dict:
     }
 
 
-@app.get("/jobs/{job_id}/objects/{global_id}")
-def object_detail(job_id: str, global_id: str) -> dict:
-    job = _require_job(job_id)
+def _load_final_index(job) -> FinalObjectIndex:
     if job.video_id is None:
-        raise HTTPException(409, f"Job {job_id} has not ingested a video yet")
-
+        raise HTTPException(409, f"Job {job.job_id} has not ingested a video yet")
     path = settings.resolve_path(settings.paths.outputs_dir) / "global_objects_final" / f"{job.video_id}.json"
     if not path.exists():
-        raise HTTPException(409, f"Job {job_id} has not finished the confirm stage yet")
+        raise HTTPException(409, f"Job {job.job_id} has not finished the confirm stage yet")
+    return FinalObjectIndex.model_validate_json(path.read_text())
 
-    index = FinalObjectIndex.model_validate_json(path.read_text())
+
+def _object_summary(obj) -> dict:
+    return {
+        "global_id": obj.global_id,
+        "class": obj.cls,
+        "attributes": [a.model_dump() for a in obj.attributes],
+    }
+
+
+@app.get("/jobs/{job_id}/objects")
+def object_list(job_id: str) -> list[dict]:
+    """All objects for a job, with their confirmed attributes -- the M15
+    object explorer's data source. Not in the roadmap's original endpoint
+    list, which only specified single-object lookup; added because "browse
+    all detected objects" has no other way to enumerate what exists."""
+    index = _load_final_index(_require_job(job_id))
+    return [_object_summary(o) for o in index.objects]
+
+
+@app.get("/jobs/{job_id}/objects/{global_id}")
+def object_detail(job_id: str, global_id: str) -> dict:
+    index = _load_final_index(_require_job(job_id))
     obj = next((o for o in index.objects if o.global_id == global_id), None)
     if obj is None:
         raise HTTPException(404, f"No object {global_id} in job {job_id}")
 
     return {
-        "global_id": obj.global_id,
-        "class": obj.cls,
-        "attributes": [a.model_dump() for a in obj.attributes],
+        **_object_summary(obj),
         "timeline": [s.model_dump() for s in obj.sightings],
         "best_shot_crops": obj.best_shot_crops,
     }
