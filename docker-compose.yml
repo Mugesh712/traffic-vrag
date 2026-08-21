@@ -41,7 +41,9 @@ services:
     volumes:
       - chroma_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v2/heartbeat || exit 1"]
+      # The chromadb/chroma image ships no curl/wget/python, so probe the port
+      # with bash's /dev/tcp instead of an HTTP client.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8000' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -49,6 +51,10 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    environment:
+      # Keep the model resident. The default unloads it after ~5 min idle, and
+      # on a CPU-only box reloading costs more than the request timeout allows.
+      OLLAMA_KEEP_ALIVE: "24h"
     ports:
       - "11434:11434"
     volumes:
@@ -78,6 +84,22 @@ services:
       PIPELINE__VECTOR_STORE__PORT: "8000"
       PIPELINE__ANSWER__HOST: http://ollama:11434
       PIPELINE__ANSWER__MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      # 60s (the default) is tuned for GPU inference; a CPU-only host needs far
+      # longer, especially on the first call that also loads the model.
+      PIPELINE__ANSWER__TIMEOUT_SEC: ${ANSWER_TIMEOUT_SEC:-60.0}
+      # --- CPU-only speed tuning (M5/M8 Florence-2 dominate runtime) ---
+      # Defaults here reproduce configs/pipeline.yaml; the .env on a CPU-only
+      # host lowers them. Accuracy cost is real: fewer samples and greedy
+      # decoding push more attributes to "uncertain" rather than wrong, which
+      # is the tradeoff this project already prefers.
+      PIPELINE__VLM__NUM_BEAMS: ${VLM_NUM_BEAMS:-3}
+      PIPELINE__VLM__FRAMES_PER_TRACK: ${VLM_FRAMES_PER_TRACK:-8}
+      PIPELINE__VLM__MAX_NEW_TOKENS: ${VLM_MAX_NEW_TOKENS:-200}
+      PIPELINE__CONFIRMATION__TOP_K: ${CONFIRM_TOP_K:-3}
+      # The UI is reached at the host's public address, not localhost, so that
+      # origin must be allowed explicitly -- the default list is dev-only, and
+      # a wildcard is not an option with allow_credentials=True.
+      PIPELINE__API__CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}
     volumes:
       # Pipeline artefacts live on the host so they survive `compose down` and
       # can be inspected/committed without entering a container.
@@ -100,8 +122,10 @@ services:
       - "5173:5173"
     environment:
       # Reached from the user's BROWSER, not from inside the compose network,
-      # so this is localhost rather than the `api` service name.
-      VITE_API_BASE_URL: http://localhost:8000
+      # so this is never the `api` service name. localhost is right only when
+      # the browser runs on the same host; a remote deploy must override this
+      # with the public address, or the browser resolves it to its own machine.
+      VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8000}
     volumes:
       - ./frontend/src:/app/src
     depends_on:

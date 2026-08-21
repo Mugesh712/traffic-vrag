@@ -3,6 +3,17 @@ import { AnswerPanel } from "./AnswerPanel";
 import { ApiError, askQuestion } from "../lib/api";
 import type { ChatTurn } from "../lib/types";
 
+// crypto.randomUUID() exists only in secure contexts (HTTPS or localhost), so
+// it is undefined when the demo is served over plain HTTP from a remote host --
+// and calling it there throws before the question is ever sent. These ids are
+// only React list keys, so a non-cryptographic fallback is fine.
+function turnId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface Props {
   jobId: string;
   ready: boolean;
@@ -21,7 +32,7 @@ export function ChatPanel({ jobId, ready, onSelectObject }: Props) {
 
   async function submit(question: string) {
     if (!question.trim() || !ready) return;
-    const id = crypto.randomUUID();
+    const id = turnId();
     setTurns((prev) => [...prev, { id, question, response: null, error: null, pending: true }]);
     setInput("");
     try {
