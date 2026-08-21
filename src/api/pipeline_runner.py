@@ -35,15 +35,19 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# (stage name, per-clip function). Run in this order for every clip before
-# moving to the next stage, matching each stage's own file-based dependency
-# on the previous one (M3 reads M2's output, M4 reads M3's, ...).
+# (stage name, per-clip function, needs_video_id). Run in this order for every
+# clip before moving to the next stage, matching each stage's own file-based
+# dependency on the previous one (M3 reads M2's output, M4 reads M3's, ...).
+#
+# Only M2 takes video_id: it locates frames on disk, which are namespaced per
+# video. The later stages read the previous stage's JSON, which already carries
+# the frame paths it resolved.
 _PER_CLIP_STAGES = (
-    ("detect", detect_clip),
-    ("track", track_clip),
-    ("associate", associate_clip),
-    ("attribute", extract_clip_attributes),
-    ("vote", vote_clip_attributes),
+    ("detect", detect_clip, True),
+    ("track", track_clip, False),
+    ("associate", associate_clip, False),
+    ("attribute", extract_clip_attributes, False),
+    ("vote", vote_clip_attributes, False),
 )
 
 
@@ -62,10 +66,13 @@ def run_pipeline(job_id: str, video_path: str, settings: PipelineSettings, store
         store.mark_stage_completed(job_id, "ingest")
 
         clip_ids = [clip.clip_id for clip in manifest.clips]
-        for stage_name, stage_fn in _PER_CLIP_STAGES:
+        for stage_name, stage_fn, needs_video_id in _PER_CLIP_STAGES:
             for i, clip_id in enumerate(clip_ids, start=1):
                 store.mark_stage_started(job_id, stage_name, detail=f"clip {i}/{len(clip_ids)}: {clip_id}")
-                stage_fn(clip_id, settings=settings)
+                if needs_video_id:
+                    stage_fn(clip_id, video_id, settings=settings)
+                else:
+                    stage_fn(clip_id, settings=settings)
             store.mark_stage_completed(job_id, stage_name)
 
         store.mark_stage_started(job_id, "link")

@@ -1,7 +1,8 @@
 """M2 — Object detection: sampled frames -> per-frame traffic-object boxes.
 
-Wraps Ultralytics YOLOv11. Reads frames from data/frames/<clip_id>/, writes
-data/outputs/detections/<clip_id>.json ([{frame_id, class, bbox, confidence}]).
+Wraps Ultralytics YOLOv11. Reads frames from data/frames/<video_id>/<clip_id>/,
+writes data/outputs/detections/<clip_id>.json
+([{frame_id, class, bbox, confidence}]).
 """
 from __future__ import annotations
 
@@ -53,12 +54,16 @@ def _target_class_indices(model, wanted: set[str]) -> dict[int, str]:
 
 def detect_clip(
     clip_id: str,
+    video_id: str,
     settings: PipelineSettings | None = None,
     batch_size: int = 16,
     visualize: bool = False,
 ) -> ClipDetections:
     settings = settings or get_settings()
-    frames_dir = settings.resolve_path(settings.paths.frames_dir) / clip_id
+    # video_id is required, not optional: this function globs the directory, so
+    # a shared one silently detects on leftover frames from other videos rather
+    # than failing. See the layout note in src/ingest/video_ingest.py.
+    frames_dir = settings.resolve_path(settings.paths.frames_dir) / video_id / clip_id
     if not frames_dir.exists():
         raise DetectorError(f"No frames directory for clip: {frames_dir}")
 
