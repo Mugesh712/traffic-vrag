@@ -337,6 +337,11 @@ class RetrievedObject(BaseModel):
     events: list[dict] = Field(default_factory=list)
     clips: list[str] = Field(default_factory=list)
     evidence_frames: list[str] = Field(default_factory=list)
+    # Wall-clock times this object was actually seen at. M13 needs these to
+    # give an object without events something citable: a citation carries a
+    # timestamp, so an object whose context showed none could not be cited at
+    # all, and its evidence and subgraph came back empty.
+    sighting_times: list[str] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 

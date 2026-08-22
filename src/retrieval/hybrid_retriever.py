@@ -277,7 +277,8 @@ WITH o, attributes, clips,
                        evidence_frames: ev.evidence_frames}) AS events
 OPTIONAL MATCH (o)-[:SEEN_AT]->(f:Frame)
 RETURN o.global_id AS global_id, o.class AS class, attributes, clips, events,
-       collect(DISTINCT f.frame_path)[0..$max_frames] AS evidence_frames
+       collect(DISTINCT f.frame_path)[0..$max_frames] AS evidence_frames,
+       collect(DISTINCT f.wallclock_time) AS sighting_times
 """.strip()
 
 
@@ -487,6 +488,10 @@ def hybrid_retrieve(
             obj.clips = sorted(c for c in record.get("clips") or [] if c)
             obj.events = [e for e in record.get("events") or [] if e.get("event_id")]
             obj.evidence_frames = [f for f in record.get("evidence_frames") or [] if f]
+            # Sorted so the earliest sighting is first: the context offers one
+            # citable time per object, and "when it was first seen" is the
+            # least arbitrary choice.
+            obj.sighting_times = sorted(t for t in record.get("sighting_times") or [] if t)
             if obj.cls == "unknown" and record.get("class"):
                 obj.cls = record["class"]
 

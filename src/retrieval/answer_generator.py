@@ -183,6 +183,18 @@ def _format_object_context(obj: RetrievedObject, max_events: int) -> tuple[str, 
     if obj.clips:
         lines.append(f"    seen in clips: {', '.join(obj.clips)}")
 
+    # A citable time for every object, not just the ones carrying events.
+    # Without this an event-less object showed no timestamp at all, so the
+    # validator rejected every citation of it -- correctly, but the effect was
+    # that answers about such objects cited nothing, and the evidence frames
+    # and KG subgraph (built only from cited objects) came back empty. Written
+    # in the citation shape so the block also demonstrates the format.
+    if obj.sighting_times:
+        first_seen = _time_of(obj.sighting_times[0])
+        if first_seen != "unknown":
+            valid_times.add(first_seen)
+            lines.append(f"    first seen: [{obj.global_id} @ {first_seen}]")
+
     for event in obj.events[:max_events]:
         role = event.get("role", "subject")
         start, end = _time_of(event.get("start_time")), _time_of(event.get("end_time"))
@@ -218,8 +230,51 @@ def build_context(
     return "\n".join(blocks), valid_times
 
 
+# Repeated immediately before the answer, not only in the system preamble. A
+# small model follows the last instruction it read, and the citation format is
+# what makes an answer checkable here, so it is restated rather than assumed.
+#
+# Measured on qwen2.5:3b against a real context, same model and same data,
+# varying only this text:
+#
+#   stated once, at the top of the prompt:
+#     "obj_0004 (car) overtook obj_0009 (car)."
+#     -> real objects in a shape the citation regex cannot match, so nothing
+#        was cited, and evidence frames and the KG subgraph (built only from
+#        validated citations) came back empty.
+#
+#   restated here, demanding only the format:
+#     "[obj_0004 @ 18:15:17] to [obj_0004 @ 18:15:19]"
+#     -> citations validate, but the sentence is gone; the answer no longer
+#        says what happened, only when.
+#
+#   restated here, demanding a sentence *and* the format, with an example
+#   written from this video's own objects:
+#     "The red car [obj_0004 @ 18:15:17] overtook the white car
+#      [obj_0009 @ 18:15:18]."
+#     -> correct for the question it was tuned on, but asked "are there any
+#        red vehicles?" the model replayed that same sentence verbatim. An
+#        example built from real ids is indistinguishable from an answer, and
+#        because those ids ARE in context the copy partly validated -- a wrong
+#        answer wearing supported citations, the worst of the three.
+#
+# So the example has to be concrete enough to imitate but impossible to pass
+# off as an answer: obj_9999 appears in no real context, so if it is ever
+# echoed the validator rejects it as unsupported instead of laundering it.
+_FORMAT_REMINDER = (
+    "IMPORTANT: answer the QUESTION in a normal sentence, and immediately after "
+    "each object you name put its citation in square brackets, copying that "
+    "object id and one of ITS OWN timestamps from the CONTEXT above. Format "
+    "example (not this video): The blue van [obj_9999 @ 09:15:00] stopped at "
+    "the junction."
+)
+
+
 def build_prompt(question: str, context: str) -> str:
-    return f"{SYSTEM_PROMPT}\n\nCONTEXT:\n{context}\n\nQUESTION: {question}\n\nANSWER:"
+    return (
+        f"{SYSTEM_PROMPT}\n\nCONTEXT:\n{context}\n\n"
+        f"{_FORMAT_REMINDER}\n\nQUESTION: {question}\n\nANSWER:"
+    )
 
 
 # ---------------------------------------------------------------------------
