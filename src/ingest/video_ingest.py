@@ -8,8 +8,15 @@ Single sequential pass over the source video:
 
 Output:
   data/clips/<clip_id>.mp4
-  data/frames/<clip_id>/<frame_id>.jpg
+  data/frames/<video_id>/<clip_id>/<frame_id>.jpg
   data/outputs/ingest/<video_id>_manifest.json  (VideoManifest)
+
+Frames are namespaced by video_id because clip ids restart at clip_000 for
+every video. Without that segment, a second video's frames landed in the same
+directory as the first's; same-numbered frames were overwritten and the rest
+survived, so M2 (which globs the directory) detected on a mix of two videos --
+inflating its runtime and writing another video's vehicles into this one's
+graph.
 """
 from __future__ import annotations
 
@@ -142,7 +149,7 @@ def ingest_video(
             clip_id = f"clip_{clip_idx:03d}"
             clip_path = clips_dir / f"{clip_id}.mp4"
             writer = cv2.VideoWriter(str(clip_path), _fourcc_for(clip_path), fps, (width, height))
-            (frames_dir / clip_id).mkdir(parents=True, exist_ok=True)
+            (frames_dir / video_id / clip_id).mkdir(parents=True, exist_ok=True)
 
         assert writer is not None
         writer.write(frame)
@@ -150,7 +157,7 @@ def ingest_video(
         if global_frame_idx % frame_interval_frames == 0:
             clip_id = f"clip_{clip_idx:03d}"
             frame_id = f"frame_{global_frame_idx:06d}"
-            frame_path = frames_dir / clip_id / f"{frame_id}.jpg"
+            frame_path = frames_dir / video_id / clip_id / f"{frame_id}.jpg"
             cv2.imwrite(str(frame_path), frame)
             video_ts, wallclock_iso = _timestamp_for(global_frame_idx)
             current_clip_frames.append(

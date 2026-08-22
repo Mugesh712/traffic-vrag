@@ -91,7 +91,7 @@ if [ -z "$CLIPS" ]; then
 fi
 
 for clip in $CLIPS; do
-  step "M2  detect   [$clip]";    "${RUN[@]}" detect "$clip"
+  step "M2  detect   [$clip]";    "${RUN[@]}" detect "$clip" "$VIDEO_ID"
   step "M3  track     [$clip]";   "${RUN[@]}" track "$clip"
   step "M4  associate [$clip]";   "${RUN[@]}" associate "$clip"
   step "M5  attribute [$clip]";   "${RUN[@]}" attribute "$clip"

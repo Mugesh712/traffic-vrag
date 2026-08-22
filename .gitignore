@@ -16,3 +16,7 @@ data/outputs/*
 *.pt
 .DS_Store
 .claude/
+# Host-specific compose overrides (public address, model choice, tuning).
+# scripts/start-demo.sh regenerates this per host; the committed defaults in
+# docker-compose.yml are what a fresh checkout should use.
+.env

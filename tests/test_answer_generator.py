@@ -8,6 +8,7 @@ import pytest
 
 from src.retrieval.answer_generator import (
     INSUFFICIENT_EVIDENCE,
+    _evidence_frames_for,
     _format_count_answer,
     _resolve_timestamps,
     build_context,
@@ -21,11 +22,13 @@ from src.utils.config import get_settings
 from src.utils.schemas import KGEdge, QueryIntent, RetrievalResult, RetrievedObject, TimestampSpan
 
 
-def obj(global_id: str, cls="car", attributes=None, events=None, clips=None, frames=None) -> RetrievedObject:
+def obj(global_id: str, cls="car", attributes=None, events=None, clips=None, frames=None,
+        sighting_times=None) -> RetrievedObject:
     return RetrievedObject(
         global_id=global_id, **{"class": cls}, score=1.0,
         attributes=attributes or [], events=events or [],
         clips=clips or ["clip_000"], evidence_frames=frames or [],
+        sighting_times=sighting_times or [],
         timeline_summary=f"summary for {global_id}",
     )
 
@@ -215,6 +218,33 @@ def test_subgraph_deduplicates_an_event_shared_by_two_objects():
     assert len(subgraph.edges) == 2  # but both INVOLVES edges present
 
 
+# --- evidence frames grouped by object -----------------------------------------
+# Grouped rather than pooled into one flat list, so the UI can show "this is
+# obj_0004" next to obj_0004's own citation instead of an undifferentiated
+# photo strip the reader has to match up by hand.
+
+
+def test_evidence_frames_are_grouped_by_the_object_they_show():
+    objects_by_id = {
+        "obj_1": obj("obj_1", frames=["f1.jpg", "f2.jpg"]),
+        "obj_2": obj("obj_2", frames=["f3.jpg"]),
+    }
+    frames_by_object = _evidence_frames_for(["obj_1", "obj_2"], objects_by_id)
+    assert frames_by_object == {"obj_1": ["f1.jpg", "f2.jpg"], "obj_2": ["f3.jpg"]}
+
+
+def test_evidence_frames_include_only_supported_objects():
+    objects_by_id = {"obj_1": obj("obj_1", frames=["f1.jpg"]), "obj_2": obj("obj_2", frames=["f2.jpg"])}
+    frames_by_object = _evidence_frames_for(["obj_1"], objects_by_id)
+    assert "obj_2" not in frames_by_object
+
+
+def test_object_with_no_evidence_frames_is_absent_not_an_empty_list():
+    objects_by_id = {"obj_1": obj("obj_1", frames=[])}
+    frames_by_object = _evidence_frames_for(["obj_1"], objects_by_id)
+    assert frames_by_object == {}
+
+
 # --- deterministic paths: counting and empty results --------------------------
 
 
@@ -248,3 +278,105 @@ def test_format_count_answer_describes_the_breakdown():
     text = _format_count_answer(r)
     assert "2" in text
     assert "white" in text and "blue" in text
+
+
+# --- citable sighting times for event-less objects --------------------------
+#
+# Citations carry a timestamp, and only cited objects become evidence frames or
+# subgraph nodes. An object with no events showed no timestamp in its context
+# block, so every citation of it was rejected and answers about it grounded
+# nothing -- observed live as an answer with empty evidence and empty subgraph.
+
+
+def test_event_less_object_still_offers_a_citable_time():
+    o = obj("obj_1", events=[], sighting_times=["2026-08-15T11:02:03.456789"])
+
+    ctx, valid_times = build_context(result(objects=[o]), get_settings())
+
+    assert "[obj_1 @ 11:02:03]" in ctx
+    assert "11:02:03" in valid_times["obj_1"]
+
+
+def test_citation_of_an_event_less_object_now_validates():
+    o = obj("obj_1", events=[], sighting_times=["2026-08-15T11:02:03"])
+    _, valid_times = build_context(result(objects=[o]), get_settings())
+
+    supported, unsupported = validate_citations([("obj_1", "11:02:03")], [o], valid_times)
+
+    assert supported == ["obj_1"]
+    assert unsupported == []
+
+
+def test_earliest_sighting_is_the_one_offered():
+    """One time is offered per object, so which one has to be defined rather
+    than whichever row the graph happened to return first."""
+    o = obj("obj_1", events=[], sighting_times=["2026-08-15T11:00:05", "2026-08-15T11:09:00"])
+
+    ctx, valid_times = build_context(result(objects=[o]), get_settings())
+
+    assert "[obj_1 @ 11:00:05]" in ctx
+    assert "11:09:00" not in valid_times["obj_1"]
+
+
+def test_sighting_time_does_not_weaken_fabricated_timestamp_rejection():
+    """This widens what can be cited; it must not widen what passes validation."""
+    o = obj("obj_1", events=[], sighting_times=["2026-08-15T11:02:03"])
+    _, valid_times = build_context(result(objects=[o]), get_settings())
+
+    supported, unsupported = validate_citations([("obj_1", "00:00:00")], [o], valid_times)
+
+    assert supported == []
+    assert unsupported == ["[obj_1 @ 00:00:00]"]
+
+
+def test_event_times_and_sighting_time_are_both_citable():
+    o = obj(
+        "obj_1",
+        events=[event("evt_1", "STOP", start="2026-08-15T11:05:00", end="2026-08-15T11:05:30")],
+        sighting_times=["2026-08-15T11:02:03"],
+    )
+
+    _, valid_times = build_context(result(objects=[o]), get_settings())
+
+    assert valid_times["obj_1"] == {"11:02:03", "11:05:00", "11:05:30"}
+
+
+def test_prompt_restates_the_citation_format_next_to_the_question():
+    """The rule appears in the preamble, but a small model follows the last
+    instruction it read. Measured: with the rule only at the top, qwen2.5:3b
+    answered "obj_0004 (car) overtook obj_0009 (car)" -- real objects in a
+    shape the citation regex cannot match, leaving the answer uncited and its
+    evidence and subgraph empty."""
+    prompt = build_prompt("who overtook?", "- obj_1 (car):")
+
+    reminder_at = prompt.rfind("obj_9999")
+    assert reminder_at != -1
+    # Asks for a sentence too: demanding the citation alone made the model drop
+    # the prose and answer "[obj_0004 @ 18:15:17] to [obj_0004 @ 18:15:19]",
+    # which says when but not what.
+    assert "normal sentence" in prompt
+    # After the context, so it is the last formatting instruction before the
+    # model starts writing.
+    assert reminder_at > prompt.find("CONTEXT:")
+    assert reminder_at < prompt.find("ANSWER:")
+
+
+def test_reminder_example_uses_an_id_no_real_context_can_contain():
+    """The reminder needs a concrete example to imitate, but an example built
+    from real ids is indistinguishable from an answer: with one, the model
+    replayed it verbatim for an unrelated question, and because those ids were
+    in context the copy partly validated -- a wrong answer carrying supported
+    citations. A sentinel id keeps the example imitable while guaranteeing a
+    verbatim echo is rejected as unsupported instead."""
+    prompt = build_prompt("who stopped?", "- obj_0004 (car):")
+
+    assert "obj_9999" in prompt
+    o = obj("obj_0004", events=[], sighting_times=["2026-08-15T11:02:03"])
+    _, valid_times = build_context(result(objects=[o]), get_settings())
+    supported, unsupported = validate_citations(
+        extract_citations("The blue van [obj_9999 @ 09:15:00] stopped at the junction."),
+        [o],
+        valid_times,
+    )
+    assert supported == []
+    assert unsupported == ["[obj_9999 @ 09:15:00]"]

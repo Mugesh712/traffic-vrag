@@ -1,21 +1,49 @@
 @import "tailwindcss";
 
-@theme {
-  --color-bg: #0b1116;
-  --color-surface: #131b22;
-  --color-surface-sunken: #0f161c;
-  --color-ink: #e7edf1;
-  --color-ink-soft: #93a4af;
-  --color-ink-faint: #5e6d78;
-  --color-border: #263139;
-  --color-accent: #6cc0d4;
-  --color-accent-soft: #142c33;
-  --color-done: #4fbe86;
-  --color-pending: #eab868;
-  --color-flag: #f0947a;
+/* Barlow Condensed: a road-signage grotesque (DIN-adjacent) -- the
+   typographic register of this subject. IBM Plex Sans/Mono: humanist and
+   technical, drawn for industrial contexts. Self-hosted rather than pulled
+   from a CDN because this ships in Docker and must render without egress. */
+@import "@fontsource/barlow-condensed/500.css";
+@import "@fontsource/barlow-condensed/600.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "IBM Plex Mono", monospace;
+@theme {
+  /* Surfaces: a monitor wall in an unlit room is a blue-grey haze, not black.
+     Pure #000 haloes text on the panels analysts actually use. */
+  --color-well: #0d1418;
+  --color-console: #16222b;
+  --color-console-2: #1d2b36;
+  --color-hairline: #24343f;
+  --color-hairline-lit: #33475a;
+
+  /* Ink */
+  --color-ink: #e6edf2;
+  --color-ink-2: #9db0bc;
+  --color-ink-3: #62757f;
+  /* Warm ink for data (ids, timestamps). Carries the sodium cast of night
+     footage while staying a TEXT token -- saturated accents are for marks. */
+  --color-ink-data: #e3d0ae;
+
+  /* Marks. Validated as a set against #0d1418 in OKLCH: lightness band,
+     chroma floor, all-pairs CVD separation (protan/deutan/tritan), the
+     normal-vision floor, and contrast. Do not nudge these by eye -- re-run
+     the validator, because amber/green/red palettes fail protan badly and
+     that is exactly what an earlier draft of this file got wrong. */
+  --color-sodium: #af7c00; /* observed: what the camera recorded */
+  --color-annotate: #1785af; /* inferred: what the system concluded */
+  --color-flag: #c13b42; /* reserved: unsupported citations, failures */
+
+  --color-sodium-dim: #2a2008;
+  --color-annotate-dim: #0d2530;
+  --color-flag-dim: #2b1417;
+
+  --font-display: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 html {
@@ -24,13 +52,88 @@ html {
 
 body {
   margin: 0;
-  background: var(--color-bg);
+  background: var(--color-well);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Data columns must align: ids and timestamps are read down a column. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
 ::selection {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: var(--color-annotate-dim);
+  color: var(--color-ink);
+}
+
+/* One visible focus treatment everywhere, on the inferred/interactive hue. */
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-annotate);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* THE UNCERTAINTY HATCH.
+   Surveying and engineering drawings have always hatched a region to mean
+   "inferred, not measured". M6/M8 hand us exactly that distinction as
+   `uncertain: true`, so it is drawn rather than hidden: a generic dashboard
+   would drop these rows, look tidier, and quietly overstate what the system
+   knows. Texture also survives greyscale print and forced-colors mode, which
+   a hue alone would not. */
+.hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    color-mix(in oklab, var(--color-ink-3) 26%, transparent) 5px 6px
+  );
+}
+
+/* The single motion moment: the subgraph assembles in the order the answer
+   was built -- objects retrieved, then events attached, then relations
+   drawn. Everything else is static. */
+@keyframes node-settle {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes edge-draw {
+  from {
+    stroke-dashoffset: var(--edge-len, 100);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.kg-node {
+  animation: node-settle 320ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.kg-edge {
+  stroke-dasharray: var(--edge-len, 100);
+  animation: edge-draw 420ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .kg-edge {
+    stroke-dasharray: none;
+  }
 }

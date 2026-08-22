@@ -52,6 +52,9 @@ def ingest(
 @app.command()
 def detect(
     clip_id: str = typer.Argument(..., help="Clip ID to run detection on."),
+    video_id: str = typer.Argument(
+        ..., help="Video ID the clip belongs to (frames are stored per video)."
+    ),
     visualize: bool = typer.Option(
         False, "--visualize", help="Write annotated frames for sanity checking."
     ),
@@ -62,7 +65,7 @@ def detect(
 
     settings = get_settings()
     clip_detections = detect_clip(
-        clip_id, settings=settings, batch_size=batch_size, visualize=visualize
+        clip_id, video_id, settings=settings, batch_size=batch_size, visualize=visualize
     )
     typer.echo(f"Detected {len(clip_detections.detections)} objects in {clip_id}")
 
