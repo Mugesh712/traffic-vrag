@@ -4,15 +4,18 @@ interface Props {
   onClick?: () => void;
 }
 
-// Unsupported citations (a name the model cited that validate_citations
-// rejected, see M13) render visibly different, never silently dropped --
-// the same principle that keeps them in the API response at all.
+/* Unsupported citations -- names the model produced that validate_citations()
+ * rejected -- render struck through and flagged, never dropped. Same
+ * principle that keeps them in the API response: a fabricated reference
+ * should be visible, not laundered into a clean-looking answer. This is the
+ * only place in the interface allowed to use the flag hue besides an outright
+ * failure. */
 export function ObjectChip({ globalId, unsupported, onClick }: Props) {
   if (unsupported) {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-md border border-flag/40 bg-flag/10 px-2 py-1 font-mono text-xs text-flag line-through decoration-flag/60"
-        title="Cited by the model but not found in the retrieved context"
+        className="inline-flex items-center gap-1 rounded-sm border border-flag/50 bg-flag-dim px-1.5 py-0.5 font-mono text-[12px] text-flag line-through decoration-flag/70"
+        title="Cited by the model but absent from the retrieved context"
       >
         {globalId}
       </span>
@@ -22,7 +25,7 @@ export function ObjectChip({ globalId, unsupported, onClick }: Props) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs text-ink transition-colors hover:border-accent hover:text-accent"
+      className="inline-flex items-center rounded-sm border border-hairline bg-console-2 px-1.5 py-0.5 font-mono text-[12px] text-ink-data transition-colors hover:border-annotate hover:text-annotate"
     >
       {globalId}
     </button>
