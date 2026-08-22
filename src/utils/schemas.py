@@ -394,7 +394,11 @@ class AnswerResult(BaseModel):
     answer: str
     supporting_object_ids: list[str] = Field(default_factory=list)
     timestamps: list[TimestampSpan] = Field(default_factory=list)
-    evidence_frames: list[str] = Field(default_factory=list)
+    # Frames grouped by the object they show, not pooled into one flat list --
+    # so the UI can put "this is what obj_0004 looks like" right next to
+    # obj_0004's citation instead of an undifferentiated photo strip the
+    # reader has to match up by hand.
+    evidence_frames_by_object: dict[str, list[str]] = Field(default_factory=dict)
     kg_subgraph: KGSubgraph = Field(default_factory=KGSubgraph)
     reasoning_trace: str = ""
     # "answered" | "insufficient_evidence" | "counting"

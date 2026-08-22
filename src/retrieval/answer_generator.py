@@ -343,13 +343,13 @@ def _resolve_timestamps(
 
 def _evidence_frames_for(
     supported_ids: list[str], objects_by_id: dict[str, RetrievedObject]
-) -> list[str]:
-    frames: list[str] = []
+) -> dict[str, list[str]]:
+    frames_by_object: dict[str, list[str]] = {}
     for global_id in supported_ids:
-        for frame in objects_by_id[global_id].evidence_frames:
-            if frame not in frames:
-                frames.append(frame)
-    return frames
+        frames = objects_by_id[global_id].evidence_frames
+        if frames:
+            frames_by_object[global_id] = frames
+    return frames_by_object
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +482,7 @@ def generate_answer(
         answer=raw_answer,
         supporting_object_ids=supported_ids,
         timestamps=_resolve_timestamps(citations, objects_by_id),
-        evidence_frames=_evidence_frames_for(supported_ids, objects_by_id),
+        evidence_frames_by_object=_evidence_frames_for(supported_ids, objects_by_id),
         kg_subgraph=build_kg_subgraph(supported_ids, objects_by_id),
         reasoning_trace=trace,
         status="answered",

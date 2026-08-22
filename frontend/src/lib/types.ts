@@ -52,7 +52,7 @@ export interface QueryResponse {
   status: "answered" | "insufficient_evidence" | "counting";
   supporting_object_ids: string[];
   timestamps: TimestampSpan[];
-  evidence_frames: string[];
+  evidence_frames_by_object: Record<string, string[]>;
   kg_subgraph: KGSubgraph;
   reasoning_trace: string;
   unsupported_citations: string[];

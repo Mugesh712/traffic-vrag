@@ -140,7 +140,7 @@ def query(request: QueryRequest) -> dict:
         "status": answer.status,
         "supporting_object_ids": answer.supporting_object_ids,
         "timestamps": [t.model_dump() for t in answer.timestamps],
-        "evidence_frames": answer.evidence_frames,
+        "evidence_frames_by_object": answer.evidence_frames_by_object,
         "kg_subgraph": answer.kg_subgraph.model_dump(),
         "reasoning_trace": answer.reasoning_trace,
         "unsupported_citations": answer.unsupported_citations,

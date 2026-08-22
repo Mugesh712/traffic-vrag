@@ -2,6 +2,7 @@ import { ObjectChip } from "./ObjectChip";
 import { TimelineStrip } from "./TimelineStrip";
 import { EvidenceGallery } from "./EvidenceGallery";
 import { KGSubgraph, KGLegend } from "./KGSubgraph";
+import { frameUrl } from "../lib/api";
 import type { QueryResponse } from "../lib/types";
 
 /* The claim on the left, its proof on the right.
@@ -18,14 +19,28 @@ interface Props {
 
 /** Renders inline [obj_0004 @ 18:15:17] citations as marks rather than raw
  * text. The bracket form is what makes the answer checkable; leaving it as
- * plain prose buries the one part an analyst is meant to follow. */
-function CitedAnswer({ text, onSelectObject }: { text: string; onSelectObject: (id: string) => void }) {
+ * plain prose buries the one part an analyst is meant to follow.
+ *
+ * Each citation also carries a thumbnail of the object it names, when the
+ * retrieval turned one up. "Which car is obj_0004" used to mean scanning the
+ * evidence strip below for a matching id; a photo at the point the id is
+ * actually read answers that without leaving the sentence. */
+function CitedAnswer({
+  text,
+  framesByObject,
+  onSelectObject,
+}: {
+  text: string;
+  framesByObject: Record<string, string[]>;
+  onSelectObject: (id: string) => void;
+}) {
   const parts = text.split(/(\[[A-Za-z0-9_]+\s*@\s*\d{1,2}:\d{2}:\d{2}\])/g);
   return (
     <p className="text-[15px] leading-[1.65] text-ink">
       {parts.map((part, i) => {
         const m = part.match(/^\[([A-Za-z0-9_]+)\s*@\s*(\d{1,2}:\d{2}:\d{2})\]$/);
         if (!m) return <span key={i}>{part}</span>;
+        const thumb = framesByObject[m[1]]?.[0];
         return (
           <button
             key={i}
@@ -34,6 +49,18 @@ function CitedAnswer({ text, onSelectObject }: { text: string; onSelectObject: (
             title={`${m[1]} at ${m[2]} — open in roster`}
             className="mx-0.5 inline-flex items-baseline gap-1 rounded-sm border-b border-dotted border-sodium/60 px-0.5 font-mono text-[13px] tabular text-ink-data transition-colors hover:border-annotate hover:text-annotate"
           >
+            {thumb && (
+              <img
+                src={frameUrl(thumb)}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                className="h-4 w-6 translate-y-[3px] rounded-[1px] border border-hairline object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            )}
             {m[1]}
             <span className="text-ink-3">{m[2]}</span>
           </button>
@@ -70,7 +97,11 @@ export function AnswerPanel({ response, onSelectObject }: Props) {
           )}
         </div>
 
-        <CitedAnswer text={response.answer} onSelectObject={onSelectObject} />
+        <CitedAnswer
+          text={response.answer}
+          framesByObject={response.evidence_frames_by_object}
+          onSelectObject={onSelectObject}
+        />
 
         {response.supporting_object_ids.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -126,7 +157,7 @@ export function AnswerPanel({ response, onSelectObject }: Props) {
             <KGLegend />
           </div>
         )}
-        <EvidenceGallery paths={response.evidence_frames} />
+        <EvidenceGallery framesByObject={response.evidence_frames_by_object} onSelectObject={onSelectObject} />
       </div>
     </article>
   );

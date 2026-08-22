@@ -8,6 +8,7 @@ import pytest
 
 from src.retrieval.answer_generator import (
     INSUFFICIENT_EVIDENCE,
+    _evidence_frames_for,
     _format_count_answer,
     _resolve_timestamps,
     build_context,
@@ -215,6 +216,33 @@ def test_subgraph_deduplicates_an_event_shared_by_two_objects():
     event_nodes = [n for n in subgraph.nodes if n.label == "Event"]
     assert len(event_nodes) == 1  # one Event node, not one per participant
     assert len(subgraph.edges) == 2  # but both INVOLVES edges present
+
+
+# --- evidence frames grouped by object -----------------------------------------
+# Grouped rather than pooled into one flat list, so the UI can show "this is
+# obj_0004" next to obj_0004's own citation instead of an undifferentiated
+# photo strip the reader has to match up by hand.
+
+
+def test_evidence_frames_are_grouped_by_the_object_they_show():
+    objects_by_id = {
+        "obj_1": obj("obj_1", frames=["f1.jpg", "f2.jpg"]),
+        "obj_2": obj("obj_2", frames=["f3.jpg"]),
+    }
+    frames_by_object = _evidence_frames_for(["obj_1", "obj_2"], objects_by_id)
+    assert frames_by_object == {"obj_1": ["f1.jpg", "f2.jpg"], "obj_2": ["f3.jpg"]}
+
+
+def test_evidence_frames_include_only_supported_objects():
+    objects_by_id = {"obj_1": obj("obj_1", frames=["f1.jpg"]), "obj_2": obj("obj_2", frames=["f2.jpg"])}
+    frames_by_object = _evidence_frames_for(["obj_1"], objects_by_id)
+    assert "obj_2" not in frames_by_object
+
+
+def test_object_with_no_evidence_frames_is_absent_not_an_empty_list():
+    objects_by_id = {"obj_1": obj("obj_1", frames=[])}
+    frames_by_object = _evidence_frames_for(["obj_1"], objects_by_id)
+    assert frames_by_object == {}
 
 
 # --- deterministic paths: counting and empty results --------------------------
