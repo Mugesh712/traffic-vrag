@@ -1,22 +1,11 @@
 import { useState } from "react";
 import { AnswerPanel } from "./AnswerPanel";
-import { ApiError, askQuestion } from "../lib/api";
 import type { ChatTurn } from "../lib/types";
 
-// crypto.randomUUID() exists only in secure contexts (HTTPS or localhost), so
-// it is undefined when the demo is served over plain HTTP from a remote host --
-// and calling it there throws before the question is ever sent. These ids are
-// only React list keys, so a non-cryptographic fallback is fine.
-function turnId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 interface Props {
-  jobId: string;
   ready: boolean;
+  turns: ChatTurn[];
+  onSubmit: (question: string) => void;
   onSelectObject: (globalId: string) => void;
 }
 
@@ -30,22 +19,13 @@ const EXAMPLES = [
   "What is the licence plate of the red car?",
 ];
 
-export function ChatPanel({ jobId, ready, onSelectObject }: Props) {
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
+export function ChatPanel({ ready, turns, onSubmit, onSelectObject }: Props) {
   const [input, setInput] = useState("");
 
-  async function submit(question: string) {
+  function submit(question: string) {
     if (!question.trim() || !ready) return;
-    const id = turnId();
-    setTurns((prev) => [...prev, { id, question, response: null, error: null, pending: true }]);
+    onSubmit(question);
     setInput("");
-    try {
-      const response = await askQuestion(jobId, question);
-      setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, response, pending: false } : t)));
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Query failed. Is the API server running?";
-      setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, error: message, pending: false } : t)));
-    }
   }
 
   return (

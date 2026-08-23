@@ -4,6 +4,7 @@ import { JobProgress } from "./components/JobProgress";
 import { ChatPanel } from "./components/ChatPanel";
 import { ObjectExplorer } from "./components/ObjectExplorer";
 import { useJobStatus } from "./lib/useJobStatus";
+import { useChatTurns } from "./lib/useChatTurns";
 
 type Tab = "ask" | "objects";
 
@@ -20,6 +21,7 @@ function App() {
   const [tab, setTab] = useState<Tab>("ask");
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
   const { status, error: pollError } = useJobStatus(jobId);
+  const { turns, submit } = useChatTurns(jobId);
 
   const setJobId = (next: string | null) => {
     setJobIdState(next);
@@ -107,8 +109,9 @@ function App() {
 
             {tab === "ask" ? (
               <ChatPanel
-                jobId={jobId}
                 ready={queryReady}
+                turns={turns}
+                onSubmit={submit}
                 onSelectObject={(id) => {
                   setSelectedObject(id);
                   setTab("objects");
