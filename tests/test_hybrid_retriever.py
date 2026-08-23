@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import pytest
 
+import src.retrieval.hybrid_retriever as hybrid_retriever
 from src.retrieval.hybrid_retriever import (
     build_count_query,
     build_event_query,
     build_object_query,
     build_vector_filter,
     fuse,
+    hybrid_retrieve,
     rrf_score,
 )
 from src.retrieval.intent import parse_intent_rules
@@ -235,3 +237,28 @@ def test_event_query_filters_by_type_and_time():
     assert "e.type IN $event_types" in cypher
     assert params["event_types"] == ["STOP"]
     assert params["after"] == "11:30:00"
+
+
+# --- orchestration: counting skips the vector half --------------------------
+#
+# generate_answer's counting branch reads only result.count/count_breakdown
+# and returns before ever touching result.objects, so a counting question has
+# no use for a similarity ranking. Calling vector_search anyway means paying
+# for an embedding call on every count -- on a cold vector store, an
+# unexpected model download over the network -- for a result nothing reads.
+
+
+def test_hybrid_retrieve_skips_vector_search_for_counting(monkeypatch):
+    calls = []
+    monkeypatch.setattr(hybrid_retriever, "vector_search", lambda *a, **k: calls.append(1) or [])
+    monkeypatch.setattr(hybrid_retriever, "_run_graph", lambda *a, **k: ([], []))
+    hybrid_retrieve("how many trucks?", "vid", settings=get_settings())
+    assert calls == []
+
+
+def test_hybrid_retrieve_still_calls_vector_search_for_a_factual_question(monkeypatch):
+    calls = []
+    monkeypatch.setattr(hybrid_retriever, "vector_search", lambda *a, **k: calls.append(1) or [])
+    monkeypatch.setattr(hybrid_retriever, "_run_graph", lambda *a, **k: ([], []))
+    hybrid_retrieve("which car overtook the truck?", "vid", settings=get_settings())
+    assert calls == [1]

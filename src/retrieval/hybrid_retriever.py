@@ -460,13 +460,21 @@ def hybrid_retrieve(
         top_k *= settings.retrieval.reasoning_widen_factor
 
     # --- vector half ---
+    # Skipped for counting: generate_answer's counting branch returns from
+    # result.count/count_breakdown alone and never reads result.objects, so a
+    # counting question cannot use a similarity ranking. Paying for one
+    # anyway means an embedding call on every count -- on a cold vector
+    # store that can mean downloading a model over the network, turning "how
+    # many trucks" from instant into the slowest question in the app, and an
+    # outright failure in an offline deployment.
     vector_hits: list[dict] = []
-    try:
-        vector_hits = vector_search(video_id, intent, settings)
-    except HybridRetrieverError as exc:
-        result.warnings.append(str(exc))
-    except Exception as exc:
-        result.warnings.append(f"Vector search failed ({exc.__class__.__name__}); graph results only.")
+    if intent.question_type != "counting":
+        try:
+            vector_hits = vector_search(video_id, intent, settings)
+        except HybridRetrieverError as exc:
+            result.warnings.append(str(exc))
+        except Exception as exc:
+            result.warnings.append(f"Vector search failed ({exc.__class__.__name__}); graph results only.")
 
     # --- graph half ---
     graph_rows, event_rows = _run_graph(video_id, intent, settings, result)
