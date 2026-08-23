@@ -52,7 +52,15 @@ export function ObjectExplorer({ jobId, ready, selectedId, onSelect }: Props) {
   if (objects === null) return <Muted>Loading roster…</Muted>;
   if (objects.length === 0) return <Muted>No objects were detected in this video.</Muted>;
 
-  const selected = visible.find((o) => o.global_id === selectedId) ?? visible[0] ?? null;
+  // Looked up against the FULL roster, not `visible` -- a citation click
+  // (obj chip, inline citation) must land on the object it names even if a
+  // stale class filter would otherwise exclude it. Falling back to some
+  // other object here would silently show the wrong record with no
+  // indication anything was substituted.
+  const selected = selectedId
+    ? (objects.find((o) => o.global_id === selectedId) ?? null)
+    : (visible[0] ?? null);
+  const selectedIsMissing = selectedId !== null && selected === null;
 
   return (
     <div className="grid gap-5 md:grid-cols-[210px_1fr]">
@@ -100,7 +108,13 @@ export function ObjectExplorer({ jobId, ready, selectedId, onSelect }: Props) {
         </ul>
       </div>
 
-      {selected ? <ObjectRecord jobId={jobId} summary={selected} /> : <Muted>Nothing selected.</Muted>}
+      {selected ? (
+        <ObjectRecord jobId={jobId} summary={selected} />
+      ) : selectedIsMissing ? (
+        <Muted>{selectedId} isn't in this video's roster.</Muted>
+      ) : (
+        <Muted>Nothing selected.</Muted>
+      )}
     </div>
   );
 }
