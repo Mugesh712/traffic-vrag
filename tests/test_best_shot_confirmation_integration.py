@@ -51,8 +51,17 @@ def settings():
     shutil.rmtree(cfg.resolve_path(cfg.vlm.cache_dir), ignore_errors=True)
 
 
-def write_fixture(settings, clip_level: dict[str, tuple[str | None, bool]], n_crops: int = 3):
-    """clip_level maps attribute -> (winner, uncertain) as M6 would have voted."""
+def write_fixture(
+    settings,
+    clip_level: dict[str, tuple[str | None, bool]],
+    n_crops: int = 3,
+    degenerate_indices: frozenset[int] = frozenset(),
+):
+    """clip_level maps attribute -> (winner, uncertain) as M6 would have voted.
+
+    degenerate_indices writes a 1x1 placeholder for those crop indices instead
+    of a real image -- the tracker writes exactly this when a box clips to
+    nothing at the frame edge (see tracker.py's _crop)."""
     outputs = settings.resolve_path(settings.paths.outputs_dir)
     crops_dir = settings.resolve_path(settings.paths.crops_dir) / CLIP_ID / "1"
     crops_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +71,12 @@ def write_fixture(settings, clip_level: dict[str, tuple[str | None, bool]], n_cr
     for i in range(n_crops):
         frame_id = f"frame_{i:06d}"
         path = crops_dir / f"{frame_id}.jpg"
-        cv2.imwrite(str(path), (rng.random((120, 130, 3)) * 255).astype(np.uint8))
+        image = (
+            np.zeros((1, 1, 3), dtype=np.uint8)
+            if i in degenerate_indices
+            else (rng.random((120, 130, 3)) * 255).astype(np.uint8)
+        )
+        cv2.imwrite(str(path), image)
         crop_paths.append(f"data/crops/{CLIP_ID}/1/{frame_id}.jpg")
 
     for sub in ("master_object_index", "tracks_associated", "attributes_canonical", "attributes_raw"):
@@ -139,8 +153,11 @@ def write_fixture(settings, clip_level: dict[str, tuple[str | None, bool]], n_cr
     return crop_paths
 
 
-def run(settings, monkeypatch, caption: str, clip_level: dict, n_crops: int = 3):
-    write_fixture(settings, clip_level, n_crops)
+def run(
+    settings, monkeypatch, caption: str, clip_level: dict, n_crops: int = 3,
+    degenerate_indices: frozenset[int] = frozenset(),
+):
+    write_fixture(settings, clip_level, n_crops, degenerate_indices)
     fake = FakeBackend(caption)
     monkeypatch.setattr(vlm_extractor, "_load_backend", lambda s: fake)
     index = confirm_video(VIDEO_ID, settings=settings)
@@ -241,6 +258,34 @@ def test_uses_the_high_detail_task_not_the_standard_one(settings, monkeypatch):
     _, fake = run(settings, monkeypatch, "a white sedan", {"color": ("white", False)})
     _, high_detail = vlm_extractor.BACKEND_TASKS["florence2"]
     assert set(fake.tasks_seen) == {high_detail}
+
+
+def test_degenerate_crop_never_reaches_the_vlm_backend(settings, monkeypatch):
+    """A track whose only crop clipped to a 1x1 placeholder at the frame edge
+    must be treated as having no best shot, not handed to the VLM: Florence-2's
+    image processor cannot parse a 1x1 image and crashes -- taking the whole
+    confirm stage (every object in the video) down with it, observed live
+    against a real upload."""
+    index, fake = run(
+        settings, monkeypatch, "a white sedan", {"color": ("white", False)},
+        n_crops=1, degenerate_indices=frozenset({0}),
+    )
+    assert fake.tasks_seen == []
+    assert index.objects[0].best_shot_crops == []
+    colour = attribute_of(index, "color")
+    assert colour.source == "clip_voting"  # fell through to M6, untouched
+
+
+def test_degenerate_crop_is_excluded_even_among_real_ones(settings, monkeypatch):
+    index, fake = run(
+        settings, monkeypatch, "a white sedan", {"color": ("white", False)},
+        n_crops=3, degenerate_indices=frozenset({1}),
+    )
+    assert len(fake.tasks_seen) == 1  # one caption_crops_to_fields() call
+    assert set(index.objects[0].best_shot_crops) == {
+        f"data/crops/{CLIP_ID}/1/frame_000000.jpg",
+        f"data/crops/{CLIP_ID}/1/frame_000002.jpg",
+    }
 
 
 def test_reads_at_most_top_k_crops(settings, monkeypatch):

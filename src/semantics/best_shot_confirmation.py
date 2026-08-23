@@ -226,7 +226,15 @@ def confirm_video(video_id: str, settings: PipelineSettings | None = None) -> Fi
 
         # Ties broken by path so the selection is reproducible.
         candidates.sort(key=lambda c: (-c.score, c.path))
-        top = candidates[: cfg.top_k]
+        # score == 0.0 includes the tracker's degenerate 1x1 placeholder for a
+        # box that clipped to nothing (object at the frame edge) -- worthless
+        # as a crop, not just low quality. Taking candidates[:top_k]
+        # unconditionally would let one through whenever an object has fewer
+        # than top_k genuinely scored crops, and Florence-2's image processor
+        # cannot handle a 1x1 image (it misreads it as single-channel and
+        # crashes normalizing against a 3-channel mean), taking the whole
+        # confirm stage down with it.
+        top = [c for c in candidates if c.score > 0.0][: cfg.top_k]
         if top:
             n_with_best_shot += 1
 
