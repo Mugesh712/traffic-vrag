@@ -67,7 +67,7 @@ SYSTEM_PROMPT = f"""You are answering questions about a traffic surveillance vid
 Rules:
 1. Answer ONLY from the CONTEXT. Never use outside knowledge or guess.
 2. Every factual claim must cite the object it comes from, using the object's ACTUAL id and ACTUAL timestamp copied from the CONTEXT -- never the literal words "global_id" or "HH:MM:SS".
-3. If the CONTEXT does not contain enough information to answer, respond with exactly: {INSUFFICIENT_EVIDENCE}
+3. If the CONTEXT does not contain enough information to answer, begin your reply with the words "{INSUFFICIENT_EVIDENCE}" and then, in one short sentence, say what specifically was missing -- not just the bare phrase alone.
 4. Do not invent objects, attributes, or events that are not in the CONTEXT.
 5. Be concise -- a few sentences, not a report.
 
@@ -77,7 +77,10 @@ Example. Given this context:
     event: STOP (as subject) [obj_0007 @ 09:15:00] to 09:15:30
 
 And the question "did any car stop?", a correctly formatted answer is:
-The red car [obj_0007 @ 09:15:00] stopped."""
+The red car [obj_0007 @ 09:15:00] stopped.
+
+If instead nothing in the context supported an answer, e.g. the question asked about a truck when only cars are in context, a correctly formatted answer is:
+Insufficient evidence -- no truck appears anywhere in the retrieved context, only cars."""
 
 
 class AnswerGeneratorError(RuntimeError):
@@ -411,26 +414,45 @@ def build_kg_subgraph(
 # ---------------------------------------------------------------------------
 
 
+# English plurals for this project's fixed, enumerable class/vehicle_type
+# vocabulary (TrafficClass, VEHICLE_TYPE_VOCAB) -- a blind "+s" gets almost
+# all of it right (car/cars, sedan/sedans, ...) but is wrong for the two that
+# actually come up in an answer: "bus" and "person".
+_IRREGULAR_PLURALS = {"bus": "buses", "person": "people"}
+
+
+def _pluralize(noun: str, n: int) -> str:
+    if not noun or n == 1:
+        return noun
+    return _IRREGULAR_PLURALS.get(noun, f"{noun}s")
+
+
 def _format_count_answer(result: RetrievalResult) -> str:
+    if result.count == 0:
+        return "No objects matching that description were found in this footage."
     if not result.count_breakdown:
-        return f"There are {result.count} matching object(s)."
+        noun = _pluralize("object", result.count)
+        verb = "is" if result.count == 1 else "are"
+        return f"There {verb} {result.count} matching {noun} in this footage."
     # build_count_query's Cypher coalesces a missing color/vehicle_type to the
     # literal string "unknown" (so rows still group sensibly), not None -- and
     # "unknown" is truthy, so `row.get("vehicle_type") or row.get("class")`
     # never reached the class fallback. A person (no vehicle_type at all)
-    # described "3 unknown unknown" instead of "3 person".
+    # described "3 unknown unknown" instead of "3 people".
     parts = []
     for row in result.count_breakdown:
+        n = row["n"]
         color = row.get("color") or ""
         if color == "unknown":
             color = ""
         vehicle_type = row.get("vehicle_type") or ""
         if vehicle_type == "unknown":
             vehicle_type = ""
-        noun = vehicle_type or row.get("class", "")
-        parts.append(f"{row['n']} {color} {noun}".split())
+        noun = _pluralize(vehicle_type or row.get("class", "object"), n)
+        parts.append(f"{n} {color} {noun}".split())
     described = ", ".join(" ".join(p) for p in parts)
-    return f"There are {result.count} matching object(s): {described}."
+    total_noun = _pluralize("object", result.count)
+    return f"The footage contains {result.count} matching {total_noun} in total: {described}."
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +477,11 @@ def generate_answer(
 
     if not result.objects:
         return AnswerResult(
-            answer=INSUFFICIENT_EVIDENCE,
+            answer=(
+                f"{INSUFFICIENT_EVIDENCE.capitalize()} -- nothing retrieved from this "
+                f'footage\'s tracked objects or events matched "{result.question}" '
+                "closely enough to support an answer."
+            ),
             status="insufficient_evidence",
             reasoning_trace="Retrieval returned no objects; the LLM was not called.",
         )

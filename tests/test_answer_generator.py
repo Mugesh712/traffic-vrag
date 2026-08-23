@@ -267,7 +267,9 @@ def test_empty_retrieval_never_calls_the_llm(monkeypatch):
 
     answer = generate_answer(result(objects=[]), settings=get_settings())
     assert answer.status == "insufficient_evidence"
-    assert answer.answer == INSUFFICIENT_EVIDENCE
+    assert answer.answer.lower().startswith(INSUFFICIENT_EVIDENCE)
+    assert "which car overtook?" in answer.answer  # says what it couldn't answer, not just the bare phrase
+    assert len(answer.answer) > len(INSUFFICIENT_EVIDENCE) + 20  # an explanation, not a one-word decline
 
 
 def test_format_count_answer_describes_the_breakdown():
@@ -289,7 +291,7 @@ def test_format_count_answer_falls_back_to_class_for_the_literal_unknown_coalesc
     ])
     text = _format_count_answer(r)
     assert "unknown" not in text
-    assert "3 person" in text
+    assert "3 people" in text  # not the grammatically-wrong "3 person"
 
 
 def test_format_count_answer_still_shows_a_real_color_alongside_unknown_type():
@@ -298,6 +300,24 @@ def test_format_count_answer_still_shows_a_real_color_alongside_unknown_type():
     ])
     text = _format_count_answer(r)
     assert "1 white car" in text
+
+
+def test_format_count_answer_reports_zero_plainly():
+    r = result(question_type="counting", count=0, breakdown=[])
+    text = _format_count_answer(r)
+    assert "0" not in text  # "There are 0 matching object(s)" reads like a query dump
+    assert "no" in text.lower()
+
+
+def test_format_count_answer_pluralizes_bus_and_person_correctly():
+    r = result(question_type="counting", count=5, breakdown=[
+        {"n": 2, "class": "bus", "color": "unknown", "vehicle_type": "unknown"},
+        {"n": 3, "class": "person", "color": "unknown", "vehicle_type": "unknown"},
+    ])
+    text = _format_count_answer(r)
+    assert "2 buses" in text
+    assert "3 people" in text
+    assert "buss" not in text and "persons" not in text
 
 
 # --- citable sighting times for event-less objects --------------------------
