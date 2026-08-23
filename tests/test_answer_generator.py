@@ -280,6 +280,26 @@ def test_format_count_answer_describes_the_breakdown():
     assert "white" in text and "blue" in text
 
 
+def test_format_count_answer_falls_back_to_class_for_the_literal_unknown_coalesce():
+    """build_count_query's Cypher coalesces a missing color/vehicle_type to
+    the string "unknown", not None -- this is that exact shape, not the
+    hand-picked None a test could pass without noticing the bug."""
+    r = result(question_type="counting", count=3, breakdown=[
+        {"n": 3, "class": "person", "color": "unknown", "vehicle_type": "unknown"},
+    ])
+    text = _format_count_answer(r)
+    assert "unknown" not in text
+    assert "3 person" in text
+
+
+def test_format_count_answer_still_shows_a_real_color_alongside_unknown_type():
+    r = result(question_type="counting", count=1, breakdown=[
+        {"n": 1, "class": "car", "color": "white", "vehicle_type": "unknown"},
+    ])
+    text = _format_count_answer(r)
+    assert "1 white car" in text
+
+
 # --- citable sighting times for event-less objects --------------------------
 #
 # Citations carry a timestamp, and only cited objects become evidence frames or

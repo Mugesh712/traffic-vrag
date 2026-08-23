@@ -414,10 +414,21 @@ def build_kg_subgraph(
 def _format_count_answer(result: RetrievalResult) -> str:
     if not result.count_breakdown:
         return f"There are {result.count} matching object(s)."
-    parts = [
-        f"{row['n']} {row.get('color', '')} {row.get('vehicle_type') or row.get('class', '')}".split()
-        for row in result.count_breakdown
-    ]
+    # build_count_query's Cypher coalesces a missing color/vehicle_type to the
+    # literal string "unknown" (so rows still group sensibly), not None -- and
+    # "unknown" is truthy, so `row.get("vehicle_type") or row.get("class")`
+    # never reached the class fallback. A person (no vehicle_type at all)
+    # described "3 unknown unknown" instead of "3 person".
+    parts = []
+    for row in result.count_breakdown:
+        color = row.get("color") or ""
+        if color == "unknown":
+            color = ""
+        vehicle_type = row.get("vehicle_type") or ""
+        if vehicle_type == "unknown":
+            vehicle_type = ""
+        noun = vehicle_type or row.get("class", "")
+        parts.append(f"{row['n']} {color} {noun}".split())
     described = ", ".join(" ".join(p) for p in parts)
     return f"There are {result.count} matching object(s): {described}."
 
