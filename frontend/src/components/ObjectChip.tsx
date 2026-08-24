@@ -25,7 +25,7 @@ export function ObjectChip({ globalId, unsupported, onClick }: Props) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center rounded-sm border border-hairline bg-console-2 px-1.5 py-0.5 font-mono text-[12px] text-ink-data transition-colors hover:border-annotate hover:text-annotate"
+      className="interactive inline-flex items-center rounded-sm border border-hairline bg-console-2 px-1.5 py-0.5 font-mono text-[12px] text-ink-data hover:border-annotate hover:text-annotate"
     >
       {globalId}
     </button>

@@ -137,3 +137,109 @@ body {
     stroke-dasharray: none;
   }
 }
+
+/* GRID-PAPER. A tactical-display texture, reserved for the KG subgraph's own
+   background -- nowhere else. Applied everywhere it would compete with text
+   for attention instead of reading as instrumentation. */
+.grid-paper {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--color-hairline) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--color-hairline) 55%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* SCANLINES. Marks an image as footage, not chrome -- applied only to actual
+   photographic crops/frames, never to UI surfaces. */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in oklab, black 30%, transparent) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.45;
+}
+
+/* GLASS. Reserved for a floating layer ON TOP of something else -- the KG's
+   own summary readout and the shared object-preview popover. Never an
+   ordinary panel background: transparency here means "this is annotating
+   the thing beneath it," and that stops being true if it is everywhere. */
+.glass {
+  background: color-mix(in oklab, var(--color-console) 74%, transparent);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--color-hairline-lit) 75%, transparent);
+  box-shadow:
+    0 10px 28px -10px color-mix(in oklab, black 65%, transparent),
+    0 1px 0 color-mix(in oklab, white 5%, transparent) inset;
+}
+
+/* GLOW. The only looping, non-reveal animation in the system, and it is
+   reserved for exactly two honest meanings: a pipeline stage that is
+   actually running right now, and a KG node this app can back with a real
+   photograph. Never a decoration on a static "this exists" state. */
+@keyframes breathe-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px var(--glow-color, var(--color-annotate)));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px var(--glow-color, var(--color-annotate)))
+      drop-shadow(0 0 2px var(--glow-color, var(--color-annotate)));
+  }
+}
+.glow-breathe {
+  animation: breathe-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.popover-in {
+  animation: popover-in 130ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.panel-in {
+  animation: panel-in 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* Micro-interaction: a single shared press/hover feel for interactive
+   controls, so it reads as one system rather than per-component tweaks. */
+.interactive {
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.interactive:hover {
+  transform: translateY(-1px);
+}
+.interactive:active {
+  transform: translateY(0) scale(0.98);
+}

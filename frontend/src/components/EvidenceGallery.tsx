@@ -45,7 +45,7 @@ export function EvidenceGallery({
                   src={frameUrl(path)}
                   alt={`${globalId}, evidence frame ${path.split("/").pop()}`}
                   loading="lazy"
-                  className="h-[72px] w-[104px] rounded-sm border border-hairline object-cover transition-colors group-hover:border-annotate"
+                  className="scanlines h-[72px] w-[104px] rounded-sm border border-hairline object-cover transition-colors group-hover:border-annotate"
                   onError={(e) => {
                     (e.currentTarget.parentElement as HTMLElement).style.display = "none";
                   }}

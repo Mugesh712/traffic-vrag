@@ -51,9 +51,9 @@ export function UploadPanel({ onUploaded }: { onUploaded: (jobId: string) => voi
           }}
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className={`flex w-full cursor-pointer flex-col items-center gap-3 rounded-sm border-2 border-dashed px-8 py-16 text-center transition-colors ${
+          className={`grid-paper flex w-full cursor-pointer flex-col items-center gap-3 rounded-sm border-2 border-dashed px-8 py-16 text-center transition-[border-color,background-color,box-shadow] ${
             dragging
-              ? "border-annotate bg-annotate-dim"
+              ? "border-annotate bg-annotate-dim shadow-[0_0_0_1px_var(--color-annotate),0_0_24px_-4px_var(--color-annotate)]"
               : "border-hairline bg-console hover:border-hairline-lit"
           }`}
         >

@@ -41,7 +41,7 @@ export function ChatPanel({ ready, turns, onSubmit, onSelectObject }: Props) {
                 key={q}
                 onClick={() => submit(q)}
                 disabled={!ready}
-                className="rounded-sm border border-hairline bg-console px-2 py-1 text-left text-xs text-ink-2 transition-colors hover:border-annotate hover:text-annotate disabled:cursor-not-allowed disabled:opacity-40"
+                className="interactive rounded-sm border border-hairline bg-console px-2 py-1 text-left text-xs text-ink-2 hover:border-annotate hover:text-annotate disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {q}
               </button>
@@ -73,7 +73,11 @@ export function ChatPanel({ ready, turns, onSubmit, onSelectObject }: Props) {
                 {turn.error}
               </p>
             )}
-            {turn.response && <AnswerPanel response={turn.response} onSelectObject={onSelectObject} />}
+            {turn.response && (
+              <div className="panel-in">
+                <AnswerPanel response={turn.response} onSelectObject={onSelectObject} />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -96,7 +100,7 @@ export function ChatPanel({ ready, turns, onSubmit, onSelectObject }: Props) {
         <button
           type="submit"
           disabled={!ready || !input.trim()}
-          className="rounded-sm bg-annotate px-4 py-2 font-display text-[15px] uppercase tracking-[0.1em] text-well transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+          className="interactive rounded-sm bg-annotate px-4 py-2 font-display text-[15px] uppercase tracking-[0.1em] text-well hover:shadow-[0_0_0_1px_var(--color-annotate),0_0_16px_-2px_var(--color-annotate)] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0 disabled:hover:shadow-none"
         >
           Ask
         </button>

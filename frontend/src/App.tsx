@@ -70,7 +70,7 @@ function App() {
                 setJobId(null);
                 setSelectedObject(null);
               }}
-              className="font-mono text-[11px] uppercase tracking-wider text-ink-3 transition-colors hover:text-annotate"
+              className="interactive font-mono text-[11px] uppercase tracking-wider text-ink-3 hover:text-annotate"
             >
               new
             </button>
@@ -146,7 +146,7 @@ function TabButton({
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={`-mb-px border-b-2 pb-2 font-display text-[17px] uppercase tracking-[0.1em] transition-colors ${
-        active ? "border-sodium text-ink" : "border-transparent text-ink-3 hover:text-ink-2"
+        active ? "border-sodium text-ink" : "border-transparent text-ink-3 hover:border-hairline-lit hover:text-ink-2"
       }`}
     >
       {children}
