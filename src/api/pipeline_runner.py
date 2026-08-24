@@ -39,14 +39,19 @@ logger = get_logger(__name__)
 # clip before moving to the next stage, matching each stage's own file-based
 # dependency on the previous one (M3 reads M2's output, M4 reads M3's, ...).
 #
-# Only M2 takes video_id: it locates frames on disk, which are namespaced per
-# video. The later stages read the previous stage's JSON, which already carries
-# the frame paths it resolved.
+# M2-M5 all take video_id: each reads the frame index via
+# load_clip_frame_index, which resolves outputs/ingest/<video_id>_manifest.json
+# directly. clip_id alone is not unique across videos (every video's first
+# clip is "clip_000"), so a stage that omitted video_id here used to resolve
+# its frames against whichever ingest manifest happened to exist on disk --
+# wrong resolution, wrong frame count, wrong images, on any machine that had
+# ever ingested more than one video. Only M6 (vote) genuinely needs nothing
+# but the previous stage's own JSON.
 _PER_CLIP_STAGES = (
     ("detect", detect_clip, True),
-    ("track", track_clip, False),
-    ("associate", associate_clip, False),
-    ("attribute", extract_clip_attributes, False),
+    ("track", track_clip, True),
+    ("associate", associate_clip, True),
+    ("attribute", extract_clip_attributes, True),
     ("vote", vote_clip_attributes, False),
 )
 

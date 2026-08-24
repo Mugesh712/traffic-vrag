@@ -406,7 +406,9 @@ def _select_sample_indices(n_available: int, n_samples: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = None) -> ClipRawAttributes:
+def extract_clip_attributes(
+    clip_id: str, video_id: str, settings: PipelineSettings | None = None
+) -> ClipRawAttributes:
     settings = settings or get_settings()
 
     tracks_path = settings.resolve_path(settings.paths.outputs_dir) / "tracks_associated" / f"{clip_id}.json"
@@ -416,7 +418,7 @@ def extract_clip_attributes(clip_id: str, settings: PipelineSettings | None = No
         )
     clip_tracks = ClipAssociatedTracks.model_validate_json(tracks_path.read_text())
 
-    frame_paths, _, _ = load_clip_frame_index(clip_id, settings)
+    frame_paths, _, _ = load_clip_frame_index(clip_id, video_id, settings)
 
     # Every track's box in every frame, so a crop's occlusion can be measured
     # against its neighbours rather than guessed.

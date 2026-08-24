@@ -92,9 +92,9 @@ fi
 
 for clip in $CLIPS; do
   step "M2  detect   [$clip]";    "${RUN[@]}" detect "$clip" "$VIDEO_ID"
-  step "M3  track     [$clip]";   "${RUN[@]}" track "$clip"
-  step "M4  associate [$clip]";   "${RUN[@]}" associate "$clip"
-  step "M5  attribute [$clip]";   "${RUN[@]}" attribute "$clip"
+  step "M3  track     [$clip]";   "${RUN[@]}" track "$clip" "$VIDEO_ID"
+  step "M4  associate [$clip]";   "${RUN[@]}" associate "$clip" "$VIDEO_ID"
+  step "M5  attribute [$clip]";   "${RUN[@]}" attribute "$clip" "$VIDEO_ID"
   step "M6  vote      [$clip]";   "${RUN[@]}" vote "$clip"
 done
 

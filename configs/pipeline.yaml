@@ -39,6 +39,8 @@ track:
   tracker: bytetrack
   track_activation_threshold: 0.25
   lost_track_buffer_frames: 30
+  # See TrackConfig's comment (src/utils/config.py) -- this is a MAX distance
+  # (1-IOU), not a minimum IOU, so lower is stricter. Do not lower it.
   minimum_matching_threshold: 0.8
   minimum_consecutive_frames: 1
   reid_model: osnet_x0_25

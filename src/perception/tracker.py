@@ -170,7 +170,7 @@ class _TrackAccumulator:
         )
 
 
-def track_clip(clip_id: str, settings: PipelineSettings | None = None) -> ClipTracks:
+def track_clip(clip_id: str, video_id: str, settings: PipelineSettings | None = None) -> ClipTracks:
     settings = settings or get_settings()
 
     detections_path = settings.resolve_path(settings.paths.outputs_dir) / "detections" / f"{clip_id}.json"
@@ -178,7 +178,7 @@ def track_clip(clip_id: str, settings: PipelineSettings | None = None) -> ClipTr
         raise TrackerError(f"No detections found for {clip_id} at {detections_path}; run `detect` first.")
     clip_detections = ClipDetections.model_validate_json(detections_path.read_text())
 
-    frame_paths, frame_timestamps, _ = load_clip_frame_index(clip_id, settings)
+    frame_paths, frame_timestamps, _ = load_clip_frame_index(clip_id, video_id, settings)
 
     detections_by_frame: dict[str, list] = defaultdict(list)
     for det in clip_detections.detections:

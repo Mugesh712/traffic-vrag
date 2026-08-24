@@ -306,7 +306,7 @@ def _merge_tracks(
     )
 
 
-def associate_clip(clip_id: str, settings: PipelineSettings | None = None) -> ClipAssociatedTracks:
+def associate_clip(clip_id: str, video_id: str, settings: PipelineSettings | None = None) -> ClipAssociatedTracks:
     settings = settings or get_settings()
 
     tracks_path = settings.resolve_path(settings.paths.outputs_dir) / "tracks" / f"{clip_id}.json"
@@ -314,7 +314,7 @@ def associate_clip(clip_id: str, settings: PipelineSettings | None = None) -> Cl
         raise AssociationError(f"No tracks found for {clip_id} at {tracks_path}; run `track` first.")
     clip_tracks = ClipTracks.model_validate_json(tracks_path.read_text())
 
-    _, frame_timestamps, _ = load_clip_frame_index(clip_id, settings)
+    _, frame_timestamps, _ = load_clip_frame_index(clip_id, video_id, settings)
     frame_positions = {frame_id: i for i, frame_id in enumerate(sorted(frame_timestamps))}
 
     summaries = [

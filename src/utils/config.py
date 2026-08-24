@@ -70,6 +70,19 @@ class TrackConfig(BaseModel):
     tracker: str = "bytetrack"
     track_activation_threshold: float = 0.25
     lost_track_buffer_frames: int = 30
+    # supervision's ByteTrack actually uses this as a MAXIMUM (1-IOU) distance,
+    # not a minimum IOU, despite the name -- passed straight through to
+    # scipy's linear_sum_assignment as a cost ceiling, so a HIGHER value here
+    # is the MORE LENIENT match (confirmed by reading supervision's own
+    # matching.linear_assignment/iou_distance source, and by its own
+    # docstring: "Decreasing minimum_matching_threshold... risks
+    # fragmentation"). 0.8 -> a detection needs only IOU >= 0.2 to extend an
+    # existing track. Verified against real fast highway footage (0.5s
+    # sampling): a genuinely-continuing car's best IOU into the next sampled
+    # frame ranged 0.12-0.66; a car that was actually new/exiting scored
+    # 0.0-0.03. 0.8 correctly links most of the former. Do not "fix" this by
+    # lowering it -- that raises the required IOU and breaks tracking, which
+    # is exactly the mistake this comment exists to prevent repeating.
     minimum_matching_threshold: float = 0.8
     minimum_consecutive_frames: int = 1
     reid_model: str = "osnet_x0_25"

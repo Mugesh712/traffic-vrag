@@ -71,6 +71,7 @@ class _TrajSample:
 
 def _build_trajectory(
     object_sightings: list[tuple[str, str]],  # (clip_id, track_id)
+    video_id: str,
     settings: PipelineSettings,
     clip_tracks_cache: dict[str, ClipAssociatedTracks],
     frame_index_cache: dict[str, tuple[dict[str, str], dict[str, float], dict[str, str]]],
@@ -85,7 +86,7 @@ def _build_trajectory(
                 continue
             clip_tracks_cache[clip_id] = ClipAssociatedTracks.model_validate_json(path.read_text())
         if clip_id not in frame_index_cache:
-            frame_index_cache[clip_id] = load_clip_frame_index(clip_id, settings)
+            frame_index_cache[clip_id] = load_clip_frame_index(clip_id, video_id, settings)
         _, frame_ts, frame_wallclock = frame_index_cache[clip_id]
 
         track = next((t for t in clip_tracks_cache[clip_id].tracks if t.track_id == track_id), None)
@@ -576,7 +577,7 @@ def detect_events(video_id: str, settings: PipelineSettings | None = None) -> Ev
     for obj in master.objects:
         sightings = [(s.clip_id, s.track_id) for s in obj.sightings]
         trajectories[obj.global_id] = _build_trajectory(
-            sightings, settings, clip_tracks_cache, frame_index_cache
+            sightings, video_id, settings, clip_tracks_cache, frame_index_cache
         )
 
     lines, polygons = load_regions(video_id, settings)

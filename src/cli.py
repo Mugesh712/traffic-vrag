@@ -73,24 +73,30 @@ def detect(
 @app.command()
 def track(
     clip_id: str = typer.Argument(..., help="Clip ID to run tracking on."),
+    video_id: str = typer.Argument(
+        ..., help="Video ID the clip belongs to (frames are stored per video)."
+    ),
 ) -> None:
     """Run multi-object tracking with ReID on a clip's detections (M3)."""
     from src.perception.tracker import track_clip
 
     settings = get_settings()
-    clip_tracks = track_clip(clip_id, settings=settings)
+    clip_tracks = track_clip(clip_id, video_id, settings=settings)
     typer.echo(f"Tracked {len(clip_tracks.tracks)} objects in {clip_id}")
 
 
 @app.command()
 def associate(
     clip_id: str = typer.Argument(..., help="Clip ID to repair fragmented tracks for."),
+    video_id: str = typer.Argument(
+        ..., help="Video ID the clip belongs to (frames are stored per video)."
+    ),
 ) -> None:
     """Repair intra-clip track fragmentation with gated association (M4)."""
     from src.perception.association import associate_clip
 
     settings = get_settings()
-    associated = associate_clip(clip_id, settings=settings)
+    associated = associate_clip(clip_id, video_id, settings=settings)
     typer.echo(
         f"Associated {clip_id}: {len(associated.tracks)} tracks "
         f"after {len(associated.merge_log)} merges"
@@ -100,12 +106,15 @@ def associate(
 @app.command()
 def attribute(
     clip_id: str = typer.Argument(..., help="Clip ID to extract attributes for."),
+    video_id: str = typer.Argument(
+        ..., help="Video ID the clip belongs to (frames are stored per video)."
+    ),
 ) -> None:
     """Run VLM attribute extraction on a clip's tracks (M5)."""
     from src.semantics.vlm_extractor import extract_clip_attributes
 
     settings = get_settings()
-    clip_attributes = extract_clip_attributes(clip_id, settings=settings)
+    clip_attributes = extract_clip_attributes(clip_id, video_id, settings=settings)
     typer.echo(f"Extracted attributes for {len(clip_attributes.attributes)} frame-observations in {clip_id}")
 
 

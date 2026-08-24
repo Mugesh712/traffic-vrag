@@ -1,13 +1,19 @@
-"""Regression test for the frame-directory collision between videos.
+"""Regression tests for clip_id collisions between videos.
 
-Clip ids restart at clip_000 for every video, so frames written to
-data/frames/<clip_id>/ landed in a shared directory. Same-numbered frames were
-overwritten and the rest survived, and because M2 *globs* that directory it
-then detected on a mix of videos -- inflating its runtime and writing one
-video's vehicles into another's graph.
+Clip ids restart at clip_000 for every video, so anything keyed on clip_id
+alone can silently resolve against the WRONG video once more than one has
+ever been processed on the same machine.
 
-Neither ingest_video nor detect_clip had any coverage, which is why the bug
-survived. These tests pin the layout and M2's use of it.
+The first class of this bug (frames written to a shared data/frames/<clip_id>/
+directory, and M2 globbing that directory) is covered below. A second,
+downstream instance of the same root cause was found later: load_clip_frame_
+index (used by M3/M4/M5/M9) globbed every ingest manifest on disk and returned
+whichever one matched clip_id first, rather than the current video's own --
+observed live as a real tracking run silently reading a stale, unrelated
+video's frame data, breaking IOU-based frame-to-frame matching so badly that
+every object came out as an orphaned single-frame track. Neither function had
+any coverage, which is why both bugs survived. These tests pin the layout and
+both functions' use of it.
 
 Fixtures are written under the real data/ tree (resolve_path is anchored to the
 project root, the same constraint the M3/M4/M5 tests work within) and cleaned up
@@ -24,6 +30,7 @@ import pytest
 from src.ingest.video_ingest import ingest_video
 from src.perception.detector import DetectorError, detect_clip
 from src.utils.config import get_settings
+from src.utils.manifest import ManifestLookupError, load_clip_frame_index
 
 VIDEO_A = "video_test_ns_a"
 VIDEO_B = "video_test_ns_b"
@@ -120,4 +127,35 @@ def test_detect_clip_looks_under_the_video_id(two_videos):
 
     # Resolving to a shared, video-less directory would have found video A's
     # frames and silently detected on them instead of raising.
+    assert "video_that_was_never_ingested" in str(excinfo.value)
+
+
+def test_load_clip_frame_index_resolves_the_correct_video_when_ambiguous(two_videos):
+    """Two videos both have a clip_000; asking for video A's must never
+    silently hand back video B's frame index just because it happened to be
+    the one whose manifest sorted first (alphabetically or otherwise)."""
+    settings, paths, _ = two_videos
+
+    manifest_a = ingest_video(paths[VIDEO_A], settings=settings)
+    manifest_b = ingest_video(paths[VIDEO_B], settings=settings)
+
+    frame_paths, _, _ = load_clip_frame_index("clip_000", VIDEO_A, settings=settings)
+
+    assert len(frame_paths) == len(manifest_a.clips[0].frames)
+    assert len(frame_paths) != len(manifest_b.clips[0].frames)  # the two fixtures differ on purpose
+    assert all(VIDEO_A in p for p in frame_paths.values())
+    assert not any(VIDEO_B in p for p in frame_paths.values())
+
+
+def test_load_clip_frame_index_raises_for_an_unknown_video_id(two_videos):
+    """Falling back to whatever manifest exists on disk would have found
+    video A's frames and silently returned them for a video that was never
+    ingested, instead of raising."""
+    settings, paths, _ = two_videos
+
+    ingest_video(paths[VIDEO_A], settings=settings)
+
+    with pytest.raises(ManifestLookupError) as excinfo:
+        load_clip_frame_index("clip_000", "video_that_was_never_ingested", settings=settings)
+
     assert "video_that_was_never_ingested" in str(excinfo.value)

@@ -133,7 +133,7 @@ def test_retry_only_fires_for_crops_that_needed_it(fixture_paths, monkeypatch):
     fake = FakeBackend()
     monkeypatch.setattr(vlm_extractor, "_load_backend", lambda settings: fake)
 
-    result = extract_clip_attributes(CLIP_ID, settings=fixture_paths)
+    result = extract_clip_attributes(CLIP_ID, VIDEO_ID, settings=fixture_paths)
 
     by_track = {a.track_id: a for a in result.attributes}
     assert by_track["1"].color == "white"
@@ -152,12 +152,12 @@ def test_retry_only_fires_for_crops_that_needed_it(fixture_paths, monkeypatch):
 def test_second_run_hits_cache_and_never_touches_backend(fixture_paths, monkeypatch):
     fake = FakeBackend()
     monkeypatch.setattr(vlm_extractor, "_load_backend", lambda settings: fake)
-    extract_clip_attributes(CLIP_ID, settings=fixture_paths)
+    extract_clip_attributes(CLIP_ID, VIDEO_ID, settings=fixture_paths)
     assert len(fake.calls) > 0
 
     def _fail(_settings):
         raise AssertionError("backend must not be loaded when every crop is cached")
 
     monkeypatch.setattr(vlm_extractor, "_load_backend", _fail)
-    result = extract_clip_attributes(CLIP_ID, settings=fixture_paths)
+    result = extract_clip_attributes(CLIP_ID, VIDEO_ID, settings=fixture_paths)
     assert len(result.attributes) == 2
