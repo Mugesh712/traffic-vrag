@@ -246,11 +246,13 @@ class RetrievalConfig(BaseModel):
 
 
 class AnswerConfig(BaseModel):
-    """M13 LLM reasoning & explainable answer generation."""
+    """M13 LLM reasoning & explainable answer generation. Override the API
+    key out of band with PIPELINE__ANSWER__GEMINI_API_KEY rather than
+    committing it here (same pattern as Neo4jConfig.password)."""
 
-    backend: str = "ollama"
-    model: str = "qwen2.5:7b"
-    host: str = "http://localhost:11434"
+    backend: str = "gemini"
+    model: str = "gemini-3.6-flash"
+    gemini_api_key: str = ""
     timeout_sec: float = 60.0
     # Low: this is grounded factual answering, not creative generation. High
     # temperature buys nothing here and only risks the model drifting off the

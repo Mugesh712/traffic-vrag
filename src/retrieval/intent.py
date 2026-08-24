@@ -14,7 +14,7 @@ This is the same "rules first, LLM later" call the roadmap itself makes for
 M9's event detection.
 
 The LLM backend slots in behind `parse_intent`'s signature when M13 brings
-Ollama; it is registered but not implemented, exactly like M5's BLIP-2 stub.
+Gemini; it is registered but not implemented, exactly like M5's BLIP-2 stub.
 """
 from __future__ import annotations
 
@@ -248,7 +248,7 @@ def parse_intent(
         return parse_intent_rules(question, known_regions)
     if backend == "llm":
         raise NotImplementedError(
-            "LLM intent parsing arrives with M13's Ollama backend; "
+            "LLM intent parsing arrives with M13's Gemini backend; "
             "use intent_backend: rules (configs/pipeline.yaml)."
         )
     raise IntentParseError(f"Unknown intent backend: {backend}")

@@ -21,6 +21,11 @@
 # configs/pipeline.yaml because the committed defaults are tuned for accuracy
 # and should stay that way; this trades some of that for runtime on hardware
 # without a GPU. Drop the VLM_* / CONFIRM_TOP_K lines to restore them.
+#
+# This script does not manage secrets: it overwrites .env wholesale below
+# (same as it already does for NEO4J_PASSWORD), so GEMINI_API_KEY must be
+# (re-)added to .env by hand after each run of this script, or /query will
+# fail until it is.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,13 +45,6 @@ fi
 cat > .env <<ENVEOF
 PUBLIC_API_URL=http://${IP}:8000
 PUBLIC_CORS_ORIGINS=["http://${IP}:5173","http://localhost:5173","http://127.0.0.1:5173"]
-
-# qwen2.5:7b (the project default) needs ~4.7GB and does not fit alongside the
-# other services on an 8GB host; 3b does.
-OLLAMA_MODEL=qwen2.5:3b
-# 60s is a GPU-era default. CPU inference, especially the first call that also
-# loads the model, exceeds it and surfaces as a 500 from /query.
-ANSWER_TIMEOUT_SEC=300.0
 
 # Florence-2 (M5 + M8) dominates pipeline runtime on CPU. Greedy decoding and
 # fewer crops cost accuracy -- more attributes come back "uncertain" rather

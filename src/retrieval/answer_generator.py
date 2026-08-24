@@ -35,8 +35,8 @@ this specific answer rather than dumping everything M12 happened to retrieve.
 Built purely from RetrievalResult's already-assembled context, with no second
 Neo4j query.
 
-Pluggable backends, same pattern as M5: Ollama is implemented; other backends
-are registered but stubbed until needed.
+Pluggable backends, same pattern as M5: Gemini (hosted, via Google's REST
+API) is implemented; other backends are registered but stubbed until needed.
 """
 from __future__ import annotations
 
@@ -96,37 +96,62 @@ class LLMBackend(Protocol):
     def generate(self, prompt: str, temperature: float) -> str: ...
 
 
-class OllamaBackend:
-    """Local models via Ollama (Qwen2.5, Llama 3.1, Mistral, Phi-4, ...) --
-    any model pulled into the local Ollama server works, since the model name
-    is just a config string."""
+_GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-    def __init__(self, model: str, host: str, timeout_sec: float):
+
+class GeminiBackend:
+    """Google's Gemini API (hosted) -- a raw REST POST, no SDK dependency, to
+    stay consistent with this module's existing style.
+
+    Auth is a `key` query parameter, not a header, so the full request URL
+    contains the secret. Diagnostics below are built from (model, status
+    code) only -- never from str(exc) or the request URL -- so the key can
+    never leak into a log line or an AnswerGeneratorError message.
+    """
+
+    def __init__(self, model: str, api_key: str, timeout_sec: float):
         self.model = model
-        self.host = host.rstrip("/")
+        self.api_key = api_key
         self.timeout_sec = timeout_sec
 
     def generate(self, prompt: str, temperature: float) -> str:
+        if not self.api_key:
+            raise AnswerGeneratorError(
+                "Gemini backend selected but no API key is configured. Set "
+                "GEMINI_API_KEY in .env (compose) or PIPELINE__ANSWER__GEMINI_API_KEY "
+                "directly, then restart."
+            )
+
         import requests
 
         try:
             response = requests.post(
-                f"{self.host}/api/generate",
+                _GEMINI_ENDPOINT.format(model=self.model),
+                params={"key": self.api_key},
                 json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": temperature},
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": temperature},
                 },
                 timeout=self.timeout_sec,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
+            status = getattr(exc.response, "status_code", "unknown")
             raise AnswerGeneratorError(
-                f"Ollama request failed ({exc.__class__.__name__}): {exc}. "
-                f"Is `ollama serve` running with model '{self.model}' pulled?"
+                f"Gemini request failed (model='{self.model}', status={status}). "
+                "Check that GEMINI_API_KEY is set and valid, and that "
+                f"'{self.model}' is a currently-served model id."
             ) from exc
-        return response.json()["response"].strip()
+
+        try:
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except (KeyError, IndexError, ValueError) as exc:
+            raise AnswerGeneratorError(
+                f"Gemini response for model '{self.model}' had an unexpected shape "
+                "(no candidates/parts found); the API may have blocked the prompt "
+                "(safety filters) or changed its response format."
+            ) from exc
 
 
 class _UnimplementedBackend:
@@ -135,7 +160,7 @@ class _UnimplementedBackend:
 
     def generate(self, prompt: str, temperature: float) -> str:
         raise NotImplementedError(
-            f"LLM backend '{self.name}' is not implemented yet; use 'ollama' "
+            f"LLM backend '{self.name}' is not implemented yet; use 'gemini' "
             "(configs/pipeline.yaml: answer.backend)."
         )
 
@@ -148,9 +173,11 @@ def _load_backend(settings: PipelineSettings) -> LLMBackend:
     if name in _BACKEND_CACHE:
         return _BACKEND_CACHE[name]
 
-    if name == "ollama":
-        backend: LLMBackend = OllamaBackend(
-            model=settings.answer.model, host=settings.answer.host, timeout_sec=settings.answer.timeout_sec
+    if name == "gemini":
+        backend: LLMBackend = GeminiBackend(
+            model=settings.answer.model,
+            api_key=settings.answer.gemini_api_key,
+            timeout_sec=settings.answer.timeout_sec,
         )
     elif name in ("openai", "anthropic"):
         backend = _UnimplementedBackend(name)

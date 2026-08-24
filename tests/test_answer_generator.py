@@ -1,6 +1,6 @@
 """Tests for M13's pure parts: citation extraction/validation, context and
-subgraph building, and the deterministic (no-LLM) paths. The Ollama backend
-itself is exercised separately in test_answer_generator_integration.py.
+subgraph building, and the deterministic (no-LLM) paths, plus GeminiBackend's
+request/response handling (mocked; no real network call).
 """
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import pytest
 
 from src.retrieval.answer_generator import (
     INSUFFICIENT_EVIDENCE,
+    AnswerGeneratorError,
+    GeminiBackend,
     _evidence_frames_for,
     _format_count_answer,
     _resolve_timestamps,
@@ -420,3 +422,113 @@ def test_reminder_example_uses_an_id_no_real_context_can_contain():
     )
     assert supported == []
     assert unsupported == ["[obj_9999 @ 09:15:00]"]
+
+
+# --- GeminiBackend -----------------------------------------------------------
+#
+# generate() lazily does `import requests` inside the method, binding the same
+# module object `requests.post` monkeypatches globally -- so patching
+# "requests.post" here reaches the backend's call without needing to reach
+# into answer_generator's namespace.
+
+
+class _FakeResponse:
+    """Stand-in for requests.Response, only the surface GeminiBackend touches."""
+
+    def __init__(self, status_code=200, json_data=None, raise_exc=None):
+        self.status_code = status_code
+        self._json_data = json_data or {}
+        self._raise_exc = raise_exc
+
+    def raise_for_status(self):
+        if self._raise_exc is not None:
+            raise self._raise_exc
+
+    def json(self):
+        return self._json_data
+
+
+def _gemini_payload(text="A car [obj_1 @ 09:00:00] passed."):
+    return {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+
+
+def test_gemini_backend_parses_a_successful_response(monkeypatch):
+    captured = {}
+
+    def fake_post(url, params=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        return _FakeResponse(json_data=_gemini_payload("  answer text  "))
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    backend = GeminiBackend(model="gemini-3.6-flash", api_key="fake-key", timeout_sec=60.0)
+    result_text = backend.generate("a prompt", temperature=0.1)
+
+    assert result_text == "answer text"  # stripped
+    assert captured["params"] == {"key": "fake-key"}
+    assert captured["url"] == (
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
+    )
+
+
+def test_gemini_backend_sends_the_correct_request_shape(monkeypatch):
+    captured = {}
+
+    def fake_post(url, params=None, json=None, timeout=None):
+        captured["json"] = json
+        return _FakeResponse(json_data=_gemini_payload())
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    backend = GeminiBackend(model="gemini-3.6-flash", api_key="fake-key", timeout_sec=60.0)
+    backend.generate("the prompt text", temperature=0.3)
+
+    body = captured["json"]
+    assert body["contents"] == [{"role": "user", "parts": [{"text": "the prompt text"}]}]
+    assert body["generationConfig"]["temperature"] == 0.3
+
+
+def test_gemini_backend_fails_fast_on_missing_api_key(monkeypatch):
+    def fail_post(*args, **kwargs):
+        raise AssertionError("requests.post must not be called with no API key")
+
+    monkeypatch.setattr("requests.post", fail_post)
+
+    backend = GeminiBackend(model="gemini-3.6-flash", api_key="", timeout_sec=60.0)
+    with pytest.raises(AnswerGeneratorError, match="GEMINI_API_KEY"):
+        backend.generate("a prompt", temperature=0.1)
+
+
+def test_gemini_backend_wraps_http_errors_without_leaking_the_api_key(monkeypatch):
+    import requests
+
+    secret_key = "super-secret-key-value"
+
+    def fake_post(url, params=None, json=None, timeout=None):
+        # Simulate real requests behavior: the exception's default string form
+        # can embed the full request URL, including ?key=<secret>.
+        full_url = f"{url}?key={params['key']}"
+        exc = requests.exceptions.HTTPError(f"403 Client Error: Forbidden for url: {full_url}")
+        exc.response = _FakeResponse(status_code=403)
+        response = _FakeResponse(status_code=403, raise_exc=exc)
+        return response
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    backend = GeminiBackend(model="gemini-3.6-flash", api_key=secret_key, timeout_sec=60.0)
+    with pytest.raises(AnswerGeneratorError) as exc_info:
+        backend.generate("a prompt", temperature=0.1)
+
+    assert secret_key not in str(exc_info.value)
+
+
+def test_gemini_backend_raises_on_malformed_response(monkeypatch):
+    def fake_post(url, params=None, json=None, timeout=None):
+        return _FakeResponse(json_data={"candidates": []})  # e.g. safety-blocked
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    backend = GeminiBackend(model="gemini-3.6-flash", api_key="fake-key", timeout_sec=60.0)
+    with pytest.raises(AnswerGeneratorError):
+        backend.generate("a prompt", temperature=0.1)

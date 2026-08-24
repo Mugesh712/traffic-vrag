@@ -47,7 +47,6 @@ with a warning rather than failing the run.
 
 ```bash
 docker compose up -d
-docker compose exec api ollama --version   # LLM lives in the ollama service
 ./scripts/reproduce.sh --docker
 ```
 
@@ -72,8 +71,14 @@ services:
 
 ```bash
 export PIPELINE__NEO4J__PASSWORD=…        # keep secrets out of the repo
+export PIPELINE__ANSWER__GEMINI_API_KEY=… # required for real LLM answers (get a key at ai.google.dev)
 export PIPELINE__DETECT__CONF_THRESHOLD=0.4
 ```
+
+Counting questions and questions retrieval finds nothing for ("insufficient
+evidence") are answered deterministically with zero API calls, so the rest of
+the pipeline is testable without a Gemini key -- only real, answerable
+questions need one.
 
 ## Evaluation
 
@@ -129,10 +134,6 @@ These are real and measured, not hypothetical:
 - **Cross-clip linking is unexercised** on the sample clip: every object
   appears in one clip, so M7 has nothing to link. Longer footage is needed to
   evaluate it.
-- **Small local LLMs under-decline.** `qwen2.5:1.5b` sometimes answers an
-  unanswerable question instead of abstaining; the roadmap's 7B suggestion
-  should be re-measured before publication.
-
 ## Tests
 
 ```bash

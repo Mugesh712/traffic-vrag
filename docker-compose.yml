@@ -1,8 +1,8 @@
 # Full stack for the Traffic-VRAG demo.
 #
-# The roadmap lists neo4j / chromadb / api / frontend. `ollama` is added
-# because M13 answers every question through a local LLM -- without it the
-# /query endpoint returns an error and "runs end-to-end" would not be true.
+# The roadmap lists neo4j / chromadb / api / frontend. M13 answers every
+# question through Gemini, a hosted LLM API -- set GEMINI_API_KEY in a .env
+# file or the /query endpoint returns an error.
 #
 #   docker compose up -d          # start everything
 #   docker compose logs -f api    # watch the pipeline
@@ -10,7 +10,7 @@
 #
 # GPU: this file is CPU-only so it runs anywhere. On an NVIDIA host, build the
 # api image with the CUDA base (see Dockerfile) and add a `deploy.resources`
-# GPU reservation to the api and ollama services.
+# GPU reservation to the api service.
 
 services:
   neo4j:
@@ -49,23 +49,6 @@ services:
       retries: 12
       start_period: 15s
 
-  ollama:
-    image: ollama/ollama:latest
-    environment:
-      # Keep the model resident. The default unloads it after ~5 min idle, and
-      # on a CPU-only box reloading costs more than the request timeout allows.
-      OLLAMA_KEEP_ALIVE: "24h"
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_models:/root/.ollama
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-
   api:
     build:
       context: .
@@ -82,10 +65,11 @@ services:
       PIPELINE__VECTOR_STORE__MODE: http
       PIPELINE__VECTOR_STORE__HOST: chromadb
       PIPELINE__VECTOR_STORE__PORT: "8000"
-      PIPELINE__ANSWER__HOST: http://ollama:11434
-      PIPELINE__ANSWER__MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
-      # 60s (the default) is tuned for GPU inference; a CPU-only host needs far
-      # longer, especially on the first call that also loads the model.
+      PIPELINE__ANSWER__MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      PIPELINE__ANSWER__GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # 60s is generous for a hosted API call (no cold-start/model-load cost
+      # like the old local-inference backend had); raise only if seeing
+      # timeouts in practice.
       PIPELINE__ANSWER__TIMEOUT_SEC: ${ANSWER_TIMEOUT_SEC:-60.0}
       # --- CPU-only speed tuning (M5/M8 Florence-2 dominate runtime) ---
       # Defaults here reproduce configs/pipeline.yaml; the .env on a CPU-only
@@ -112,8 +96,6 @@ services:
         condition: service_healthy
       chromadb:
         condition: service_healthy
-      ollama:
-        condition: service_started
 
   frontend:
     build:
@@ -134,5 +116,4 @@ services:
 volumes:
   neo4j_data:
   chroma_data:
-  ollama_models:
   model_cache:
