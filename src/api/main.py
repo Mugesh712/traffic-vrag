@@ -40,7 +40,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from src.api.job_store import JobStore
+from src.api.job_store import JobStore, build_job_store
 from src.api.pipeline_runner import run_pipeline
 from src.retrieval.answer_generator import generate_answer
 from src.retrieval.hybrid_retriever import hybrid_retrieve
@@ -66,7 +66,7 @@ _store: JobStore | None = None
 def get_store() -> JobStore:
     global _store
     if _store is None:
-        _store = JobStore(settings.resolve_path(settings.api.db_path))
+        _store = build_job_store(settings)
     return _store
 
 

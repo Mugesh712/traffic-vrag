@@ -15,7 +15,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 import src.api.main as api_main
-from src.api.job_store import JobStore
 from src.utils.config import get_settings
 
 VIDEO_ID = "video_test_m14"

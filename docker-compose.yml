@@ -84,6 +84,22 @@ services:
       # origin must be allowed explicitly -- the default list is dev-only, and
       # a wildcard is not an option with allow_credentials=True.
       PIPELINE__API__CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}
+      # --- Job store ---------------------------------------------------------
+      # Default: the built-in SQLite file store, nothing external. To use
+      # DynamoDB instead, set JOBS_BACKEND=dynamodb and provide AWS credentials
+      # (put the block from your AWS console into .env), or run
+      #   docker compose --profile aws up
+      # which also starts a local DynamoDB (localstack) and points the API at it
+      # via AWS_ENDPOINT_URL below.
+      PIPELINE__API__JOBS_BACKEND: ${JOBS_BACKEND:-sqlite}
+      PIPELINE__API__JOBS_TABLE_NAME: ${JOBS_TABLE_NAME:-traffic-vrag-jobs}
+      PIPELINE__AWS__REGION: ${AWS_REGION:-}
+      PIPELINE__AWS__ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      # boto3 reads these from the environment. Empty on the SQLite path, which
+      # never constructs an AWS client.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     volumes:
       # Pipeline artefacts live on the host so they survive `compose down` and
       # can be inspected/committed without entering a container.
@@ -96,6 +112,19 @@ services:
         condition: service_healthy
       chromadb:
         condition: service_healthy
+
+  # Local stand-in for DynamoDB, started only with `--profile aws`. When on,
+  # set AWS_ENDPOINT_URL=http://localstack:4566, AWS_REGION=us-east-1 and dummy
+  # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env, plus JOBS_BACKEND=dynamodb.
+  localstack:
+    image: localstack/localstack:3
+    profiles: ["aws"]
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: dynamodb
+    volumes:
+      - localstack_data:/var/lib/localstack
 
   frontend:
     build:
@@ -117,3 +146,4 @@ volumes:
   neo4j_data:
   chroma_data:
   model_cache:
+  localstack_data:

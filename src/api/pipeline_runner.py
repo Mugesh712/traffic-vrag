@@ -1,5 +1,5 @@
 """M14 — Runs the full M1-M11 pipeline as one background job, reporting
-progress per stage to the SQLite job store.
+progress per stage to the job store (SQLite or DynamoDB, see job_store.py).
 
 video_id == job_id, BY CONSTRUCTION. The uploaded file is saved as
 `<job_id><ext>` before M1 ever sees it, and M1 derives video_id from the

@@ -275,12 +275,34 @@ class AnswerConfig(BaseModel):
     max_events_per_object: int = 5
 
 
+class AwsConfig(BaseModel):
+    """Shared AWS client settings for the optional cloud backends -- the
+    DynamoDB job store (M14) now, the S3 artifact store later. Credentials are
+    deliberately NOT here: boto3 resolves them from the standard chain
+    (AWS_* env vars, ~/.aws/credentials, an instance role), so nothing secret
+    is ever committed or logged.
+
+    Both fields default to "" meaning "let boto3 decide": the real AWS
+    endpoints, and the region from AWS_REGION / ~/.aws/config. Point
+    endpoint_url at http://localhost:4566 to run against localstack.
+    """
+
+    region: str = ""
+    endpoint_url: str = ""
+
+
 class ApiConfig(BaseModel):
     """M14 FastAPI backend."""
 
     host: str = "0.0.0.0"
     port: int = 8000
+    # Job store backend. "sqlite" is the default and needs nothing external --
+    # a single file at db_path. "dynamodb" stores one item per job in
+    # jobs_table_name instead, using the shared AwsConfig for the client; the
+    # table is created on first use if the credentials allow it.
+    jobs_backend: str = "sqlite"
     db_path: str = "data/outputs/jobs.db"
+    jobs_table_name: str = "traffic-vrag-jobs"
     # Explicit dev-server origins, never "*" -- CORS with allow_credentials=True
     # and a wildcard origin is a real vulnerability (any site can then read
     # authenticated responses), so the two must never be combined.
@@ -347,6 +369,7 @@ class PipelineSettings(BaseSettings):
     confirmation: ConfirmationConfig = ConfirmationConfig()
     events: EventsConfig = EventsConfig()
     neo4j: Neo4jConfig = Neo4jConfig()
+    aws: AwsConfig = AwsConfig()
     vector_store: VectorStoreConfig = VectorStoreConfig()
     retrieval: RetrievalConfig = RetrievalConfig()
     retrieval_weights: RetrievalWeights = RetrievalWeights()
