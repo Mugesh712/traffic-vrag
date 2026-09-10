@@ -25,6 +25,7 @@ from pathlib import Path
 
 import cv2
 
+from src.utils import image_io
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.schemas import ClipManifest, FrameRecord, VideoManifest
@@ -85,8 +86,13 @@ def ingest_video(
     clip_length_frames = max(1, round(clip_length_sec * fps))
     frame_interval_frames = max(1, round(frame_sample_interval_sec * fps))
 
-    clips_dir = settings.resolve_path(settings.paths.clips_dir)
+    # Clip .mp4s are archival only -- no stage ever re-opens them (the manifest
+    # just records the path string), and cv2.VideoWriter needs a local file --
+    # so they stay on local disk. Sampled frames DO get read by M2/M3/M5, so
+    # they go to the artifact store.
+    clips_dir = settings.local_path(settings.paths.clips_dir)
     frames_dir = settings.resolve_path(settings.paths.frames_dir)
+    repo_root = settings.local_path(".")
     clips_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info(
@@ -123,9 +129,7 @@ def ingest_video(
             ClipManifest(
                 video_id=video_id,
                 clip_id=clip_id,
-                clip_path=str((clips_dir / f"{clip_id}.mp4").relative_to(
-                    settings.resolve_path(".")
-                )),
+                clip_path=str((clips_dir / f"{clip_id}.mp4").relative_to(repo_root)),
                 start_wallclock=start_iso,
                 end_wallclock=end_wallclock.isoformat(),
                 fps=fps,
@@ -158,7 +162,7 @@ def ingest_video(
             clip_id = f"clip_{clip_idx:03d}"
             frame_id = f"frame_{global_frame_idx:06d}"
             frame_path = frames_dir / video_id / clip_id / f"{frame_id}.jpg"
-            cv2.imwrite(str(frame_path), frame)
+            image_io.imwrite(frame_path, frame)
             video_ts, wallclock_iso = _timestamp_for(global_frame_idx)
             current_clip_frames.append(
                 FrameRecord(

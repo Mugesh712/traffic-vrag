@@ -35,11 +35,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
 
 from src.retrieval.answer_generator import INSUFFICIENT_EVIDENCE, _load_backend as _load_llm
 from src.semantics.vlm_extractor import caption_images, get_tasks
+from src.utils import image_io
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.schemas import VideoManifest
@@ -78,7 +78,7 @@ def _sample_frames(
 
     frames = []
     for frame_id, frame_path in records:
-        image = cv2.imread(str(settings.resolve_path(frame_path)))
+        image = image_io.imread(settings.resolve_path(frame_path))
         if image is not None:
             frames.append((frame_id, image))
     return frames

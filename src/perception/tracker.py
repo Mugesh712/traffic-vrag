@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 import supervision as sv
 
+from src.utils import image_io
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.manifest import load_clip_frame_index
@@ -211,7 +212,7 @@ def track_clip(clip_id: str, video_id: str, settings: PipelineSettings | None = 
     for frame_id in ordered_frame_ids:
         dets = detections_by_frame.get(frame_id, [])
         image_path = settings.resolve_path(frame_paths[frame_id])
-        image = cv2.imread(str(image_path))
+        image = image_io.imread(image_path)
         if image is None:
             logger.warning("track_clip: could not read frame %s, skipping", image_path)
             continue
@@ -246,7 +247,7 @@ def track_clip(clip_id: str, video_id: str, settings: PipelineSettings | None = 
             crop_dir = crops_dir / track_id
             crop_dir.mkdir(parents=True, exist_ok=True)
             crop_path = crop_dir / f"{frame_id}.jpg"
-            cv2.imwrite(str(crop_path), crop)
+            image_io.imwrite(crop_path, crop)
 
             acc = accumulators.setdefault(
                 track_id,

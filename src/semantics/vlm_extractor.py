@@ -41,6 +41,7 @@ from src.semantics.vocabulary import (
     VEHICLE_TYPE_VOCAB,
     match_vocab,
 )
+from src.utils import image_io
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.manifest import load_clip_frame_index
@@ -437,7 +438,7 @@ def extract_clip_attributes(
         for i in indices:
             frame_id = track.frames[i]
             if frame_id not in frame_image_cache:
-                image = cv2.imread(str(settings.resolve_path(frame_paths[frame_id])))
+                image = image_io.imread(settings.resolve_path(frame_paths[frame_id]))
                 if image is None:
                     logger.warning("vlm_extractor: could not read frame %s, skipping", frame_id)
                     continue

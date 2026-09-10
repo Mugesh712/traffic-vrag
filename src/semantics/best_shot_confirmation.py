@@ -45,6 +45,7 @@ import numpy as np
 from src.semantics.temporal_voting import _vote_on_attribute
 from src.semantics.vlm_extractor import caption_crops_to_fields, get_tasks
 from src.semantics.vocabulary import ATTRIBUTES
+from src.utils import image_io
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.schemas import (
@@ -208,7 +209,7 @@ def confirm_video(video_id: str, settings: PipelineSettings | None = None) -> Fi
                 if parsed is None:
                     continue
                 clip_id, track_id, frame_id = parsed
-                image = cv2.imread(str(settings.resolve_path(crop_path)))
+                image = image_io.imread(settings.resolve_path(crop_path))
                 if image is None:
                     logger.warning("confirm_video: missing crop %s, skipping", crop_path)
                     continue

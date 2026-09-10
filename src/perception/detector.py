@@ -10,6 +10,7 @@ from pathlib import Path
 
 import cv2
 
+from src.utils import image_io
 from src.utils.config import PipelineSettings, get_settings
 from src.utils.logging import get_logger
 from src.utils.schemas import ClipDetections, Detection, TrafficClass
@@ -98,8 +99,11 @@ def detect_clip(
     detections: list[Detection] = []
     for i in range(0, len(frame_paths), batch_size):
         batch = frame_paths[i : i + batch_size]
+        # Decode here rather than handing paths to YOLO: a frame may live on
+        # S3, which ultralytics cannot open. image_io keeps the fast local
+        # path (cv2.imread on the real file) when it can.
         results = model.predict(
-            source=[str(p) for p in batch],
+            source=[image_io.imread(p) for p in batch],
             conf=settings.detect.conf_threshold,
             iou=settings.detect.iou_threshold,
             classes=list(class_map.keys()),
@@ -126,7 +130,7 @@ def detect_clip(
 
             if viz_dir is not None:
                 annotated = result.plot()
-                cv2.imwrite(str(viz_dir / frame_path.name), annotated)
+                image_io.imwrite(viz_dir / frame_path.name, annotated)
 
     clip_detections = ClipDetections(clip_id=clip_id, detections=detections)
 

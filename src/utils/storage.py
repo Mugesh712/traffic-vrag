@@ -397,6 +397,12 @@ class ArtifactPath:
     def __hash__(self) -> int:
         return hash((self._storage.root_uri, self._key))
 
+    def __lt__(self, other: "ArtifactPath") -> bool:
+        # so sorted() over glob()/iterdir() results works, like sorted(Path...)
+        if not isinstance(other, ArtifactPath):
+            return NotImplemented
+        return self._key < other._key
+
 
 def build_storage(settings) -> Storage:
     """Construct the byte backend named by `settings.storage.backend`."""
