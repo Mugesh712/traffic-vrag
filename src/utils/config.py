@@ -275,6 +275,27 @@ class AnswerConfig(BaseModel):
     max_events_per_object: int = 5
 
 
+class StorageConfig(BaseModel):
+    """Where pipeline artifacts -- everything under data/ -- are read and
+    written.
+
+    "local"  -- the project directory, exactly as the CLI has always worked.
+    "s3"     -- s3://<s3_bucket>/<s3_prefix>/..., using the shared aws:
+                settings for the client.
+
+    Model weights, the SQLite job database and ChromaDB's persist directory
+    are infrastructure, not artifacts -- they always stay local regardless of
+    this setting.
+
+    NOT WIRED IN YET: resolve_path() still returns a local pathlib.Path. See
+    src/utils/storage.py.
+    """
+
+    backend: str = "local"
+    s3_bucket: str = ""
+    s3_prefix: str = "traffic-vrag"
+
+
 class AwsConfig(BaseModel):
     """Shared AWS client settings for the optional cloud backends -- the
     DynamoDB job store (M14) now, the S3 artifact store later. Credentials are
@@ -370,6 +391,7 @@ class PipelineSettings(BaseSettings):
     events: EventsConfig = EventsConfig()
     neo4j: Neo4jConfig = Neo4jConfig()
     aws: AwsConfig = AwsConfig()
+    storage: StorageConfig = StorageConfig()
     vector_store: VectorStoreConfig = VectorStoreConfig()
     retrieval: RetrievalConfig = RetrievalConfig()
     retrieval_weights: RetrievalWeights = RetrievalWeights()

@@ -143,6 +143,15 @@ neo4j:
   database: neo4j
   batch_size: 1000
 
+storage:
+  # Where pipeline artifacts (everything under data/) live. "local" is the
+  # project directory, as always. "s3" uses s3://<s3_bucket>/<s3_prefix>/...
+  # with the aws: settings below. Model weights, the job DB and the Chroma
+  # persist dir always stay local. NOT wired into the stages yet.
+  backend: local
+  s3_bucket: ""
+  s3_prefix: traffic-vrag
+
 aws:
   # Shared client settings for the optional cloud backends (DynamoDB job
   # store now, S3 artifact store later). Credentials are NOT set here -- boto3
