@@ -388,7 +388,9 @@ def build_job_store(settings) -> JobStore:
     """Construct the job store named by `settings.api.jobs_backend`."""
     backend = settings.api.jobs_backend.strip().lower()
     if backend == "sqlite":
-        return SqliteJobStore(settings.resolve_path(settings.api.db_path))
+        # A SQLite file is infrastructure, not a pipeline artifact -- always
+        # local, never the artifact store (which may be S3).
+        return SqliteJobStore(settings.local_path(settings.api.db_path))
     if backend == "dynamodb":
         return DynamoDbJobStore(
             settings.api.jobs_table_name,

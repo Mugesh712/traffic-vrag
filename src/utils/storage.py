@@ -115,23 +115,40 @@ class LocalStorage:
         return open(target, mode)
 
 
-class _S3Writer(io.BytesIO):
-    """A write handle that uploads its buffer to S3 on close()."""
+class _S3Writer:
+    """A write handle that uploads to S3 on close(). Backed by a spooled temp
+    file so a large upload streams through disk, not RAM, and goes up as a
+    multipart transfer. A close() inside a `with` block that is unwinding an
+    exception is treated as an abort and uploads nothing."""
 
-    def __init__(self, storage: "S3Storage", key: str, text: bool):
-        super().__init__()
+    def __init__(self, storage: "S3Storage", key: str):
+        import tempfile
+
         self._storage = storage
         self._key = key
-        self._text = text
+        self._buf = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
         self._done = False
+        self._aborted = False
+
+    def write(self, data) -> int:
+        return self._buf.write(data)
+
+    def abort(self) -> None:
+        self._aborted = True
 
     def close(self) -> None:
-        if not self._done:
+        if not self._done and not self._aborted:
             self._done = True
-            self._storage.write_bytes(self._key, self.getvalue())
-        super().close()
+            self._buf.seek(0)
+            self._storage.upload_fileobj(self._key, self._buf)
+        self._buf.close()
 
-    def __exit__(self, *exc) -> None:
+    def __enter__(self) -> "_S3Writer":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if exc_type is not None:
+            self._aborted = True
         self.close()
 
 
@@ -174,6 +191,9 @@ class S3Storage:
     def write_bytes(self, key: str, data: bytes) -> None:
         self._client.put_object(Bucket=self.bucket, Key=self._s3_key(key), Body=data)
 
+    def upload_fileobj(self, key: str, fileobj) -> None:
+        self._client.upload_fileobj(fileobj, self.bucket, self._s3_key(key))
+
     def exists(self, key: str) -> bool:
         from botocore.exceptions import ClientError
 
@@ -205,7 +225,7 @@ class S3Storage:
 
     def open(self, key: str, mode: str) -> IO:
         if any(c in mode for c in "wxa"):
-            return _S3Writer(self, key, text="b" not in mode)
+            return _S3Writer(self, key)
         data = self.read_bytes(key)
         return io.BytesIO(data) if "b" in mode else io.StringIO(data.decode())
 
@@ -263,6 +283,19 @@ class ArtifactPath:
     def key(self) -> str:
         return self._key
 
+    @property
+    def local_path(self) -> Path | None:
+        """The real filesystem path if this artifact is on local disk, else
+        None. For the few places that must hand a path to code with no bytes
+        API (FileResponse, a subprocess, a C library)."""
+        return self._storage.local_path(self._key)
+
+    def is_within(self, other: "ArtifactPath | str") -> bool:
+        """True if this key is `other` or nested under it -- a containment
+        check for user-supplied sub-paths."""
+        other_key = other._key if isinstance(other, ArtifactPath) else _normalize(other)
+        return self._key == other_key or self._key.startswith(f"{other_key}/") if other_key else True
+
     # --- IO -------------------------------------------------------------
     def read_bytes(self) -> bytes:
         return self._storage.read_bytes(self._key)
@@ -287,6 +320,28 @@ class ArtifactPath:
         local = self._storage.local_path(self._key)
         return local.is_file() if local is not None else self._storage.exists(self._key)
 
+    def is_dir(self) -> bool:
+        local = self._storage.local_path(self._key)
+        if local is not None:
+            return local.is_dir()
+        # S3 has no directories -- treat "has anything under this prefix" as it.
+        return any(True for _ in self._storage.iter_keys(self._key))
+
+    def iterdir(self) -> Iterator["ArtifactPath"]:
+        """Immediate children (files and pseudo-directories), like Path.iterdir."""
+        local = self._storage.local_path(self._key)
+        if local is not None:
+            for child in local.iterdir():
+                yield self / child.name
+            return
+        prefix = f"{self._key}/" if self._key else ""
+        seen: set[str] = set()
+        for key in self._storage.iter_keys(self._key):
+            child = key[len(prefix):].split("/", 1)[0]
+            if child and child not in seen:
+                seen.add(child)
+                yield self / child
+
     def mkdir(self, parents: bool = False, exist_ok: bool = False) -> None:
         local = self._storage.local_path(self._key)
         if local is not None:
@@ -295,6 +350,12 @@ class ArtifactPath:
 
     def unlink(self, missing_ok: bool = False) -> None:
         self._storage.delete(self._key, missing_ok=missing_ok)
+
+    def rmdir(self) -> None:
+        local = self._storage.local_path(self._key)
+        if local is not None:
+            local.rmdir()
+        # S3: no directories to remove.
 
     def glob(self, pattern: str) -> Iterator["ArtifactPath"]:
         """Non-recursive, like `Path.glob('*.json')`: only immediate children

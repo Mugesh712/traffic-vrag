@@ -58,8 +58,11 @@ def get_chroma_client(settings: PipelineSettings):
 
     mode = settings.vector_store.mode
     if mode == "embedded":
+        # ChromaDB writes its own on-disk format and needs a real local
+        # directory; it is not an artifact the other stages read. (docker
+        # uses mode "http" and a standalone chromadb service instead.)
         return chromadb.PersistentClient(
-            path=str(settings.resolve_path(settings.vector_store.persist_dir))
+            path=str(settings.local_path(settings.vector_store.persist_dir))
         )
     if mode == "http":
         return chromadb.HttpClient(

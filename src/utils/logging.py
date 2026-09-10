@@ -18,7 +18,9 @@ def setup_logging(level: str | None = None) -> None:
 
     settings = get_settings()
     log_level = level or settings.logging.level
-    log_dir = settings.resolve_path(settings.logging.log_dir)
+    # Logs are infrastructure, not a pipeline artifact: a logging.FileHandler
+    # needs a real local file, so this never goes through the artifact store.
+    log_dir = settings.local_path(settings.logging.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
     formatter = logging.Formatter(

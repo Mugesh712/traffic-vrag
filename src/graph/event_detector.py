@@ -322,7 +322,9 @@ def load_regions(video_id: str, settings: PipelineSettings) -> tuple[list[_Line]
     """Load configs/regions/<video_id>.yaml. Missing file -> no regions, no
     CROSSES events for this video; that is expected, not an error, since
     regions are optional per-video configuration."""
-    path = settings.resolve_path(settings.events.regions_dir) / f"{video_id}.yaml"
+    # Per-video region config lives in the repo under configs/, not with the
+    # data artifacts, so it is read locally regardless of storage.backend.
+    path = settings.local_path(settings.events.regions_dir) / f"{video_id}.yaml"
     if not path.exists():
         return [], []
 

@@ -6,10 +6,14 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from src.utils.storage import ArtifactPath
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "pipeline.yaml"
@@ -399,7 +403,29 @@ class PipelineSettings(BaseSettings):
     api: ApiConfig = ApiConfig()
     logging: LoggingConfig = LoggingConfig()
 
-    def resolve_path(self, relative: str) -> Path:
+    _artifact_store: object = PrivateAttr(default=None)
+
+    @property
+    def artifacts(self) -> "ArtifactPath":
+        """Root of the artifact store -- local disk or S3 per storage.backend.
+        Built once and cached on the (also cached) settings instance."""
+        if self._artifact_store is None:
+            from src.utils.storage import build_artifact_store
+
+            object.__setattr__(self, "_artifact_store", build_artifact_store(self))
+        return self._artifact_store
+
+    def resolve_path(self, relative: str) -> "ArtifactPath":
+        """Resolve a repo-relative path to an artifact handle. With
+        storage.backend == "local" (the default) this behaves exactly like the
+        old `PROJECT_ROOT / relative`: str() and os.fspath() give the real
+        filesystem path, and every Path operation the pipeline uses works."""
+        return self.artifacts / relative
+
+    def local_path(self, relative: str) -> Path:
+        """A real local filesystem path, regardless of storage.backend. For
+        infrastructure that is not a pipeline artifact and cannot live on S3:
+        the SQLite job DB, ChromaDB's persist dir, log files, model caches."""
         return PROJECT_ROOT / relative
 
 

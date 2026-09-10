@@ -33,9 +33,10 @@ compose deliberately does not attempt to set up.
 from __future__ import annotations
 
 import shutil
+from mimetypes import guess_type
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -88,8 +89,12 @@ async def upload(file: UploadFile, background_tasks: BackgroundTasks) -> dict:
     job = store.create_job(video_path="")  # video_path filled in once we know job_id
 
     # Saved as <job_id><ext> so M1's filename-derived video_id is the job_id.
+    # The raw upload stays on local disk regardless of storage.backend: it is
+    # transient input (re-uploadable), and M1's cv2.VideoCapture needs a
+    # seekable local file. The pipeline's *outputs* are what the artifact
+    # store carries.
     suffix = Path(file.filename or "").suffix or ".mp4"
-    raw_dir = settings.resolve_path(settings.paths.raw_dir)
+    raw_dir = settings.local_path(settings.paths.raw_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
     dest = raw_dir / f"{job.job_id}{suffix}"
 
@@ -191,18 +196,24 @@ def object_detail(job_id: str, global_id: str) -> dict:
 
 
 @app.get("/frames/{path:path}")
-def frame(path: str) -> FileResponse:
-    data_root = settings.resolve_path(settings.paths.data_dir).resolve()
-    resolved = (settings.resolve_path(".") / path).resolve()
-
-    # Containment check against the resolved (symlink-free) path, not the raw
-    # string, so "../" segments and symlinks are both caught.
-    if data_root not in resolved.parents and resolved != data_root:
+def frame(path: str):
+    # `path` is user-supplied. resolve_path()/_normalize rejects any ".."
+    # segment outright (raising ValueError); on top of that we require the key
+    # to sit under data/, so nothing outside the artifact tree is reachable.
+    try:
+        artifact = settings.resolve_path(path)
+    except ValueError:
+        raise HTTPException(400, "Invalid path")
+    if not artifact.is_within(settings.paths.data_dir):
         raise HTTPException(400, "Path must be inside the data directory")
-    if not resolved.is_file():
+    if not artifact.is_file():
         raise HTTPException(404, f"No file at {path}")
 
-    return FileResponse(resolved)
+    local = artifact.local_path
+    if local is not None:
+        return FileResponse(local)
+    # S3-backed: stream the bytes through rather than exposing the bucket.
+    return Response(content=artifact.read_bytes(), media_type=guess_type(path)[0] or "application/octet-stream")
 
 
 @app.get("/health")
