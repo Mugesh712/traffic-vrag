@@ -80,6 +80,23 @@ evidence") are answered deterministically with zero API calls, so the rest of
 the pipeline is testable without a Gemini key -- only real, answerable
 questions need one.
 
+### Optional AWS backends
+
+Two pieces can run on AWS instead of locally; both default off and reuse one
+credential source (boto3's standard chain -- `AWS_*` env vars, `~/.aws`, an
+instance role -- never `configs/`).
+
+| What | Local default | AWS | Switch |
+| --- | --- | --- | --- |
+| Job store (M14) | SQLite file | DynamoDB | `PIPELINE__API__JOBS_BACKEND=dynamodb` |
+| Pipeline artifacts (`data/outputs`, frames, crops) | `./data` | `s3://<bucket>/<prefix>` | `PIPELINE__STORAGE__BACKEND=s3` + `PIPELINE__STORAGE__S3_BUCKET=…` |
+
+Raw uploads, clip `.mp4`s, the job database and ChromaDB's directory always
+stay on local disk -- they are infrastructure or transient input, not
+artifacts other stages read. `docker compose --profile aws up` starts a
+localstack container so both can be exercised with no AWS account (see the
+comments on the `localstack` service).
+
 ## Evaluation
 
 ```bash
@@ -137,5 +154,5 @@ These are real and measured, not hypothetical:
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q     # 353 tests
+.venv/bin/python -m pytest tests/ -q     # 442 tests
 ```

@@ -93,6 +93,13 @@ services:
       # via AWS_ENDPOINT_URL below.
       PIPELINE__API__JOBS_BACKEND: ${JOBS_BACKEND:-sqlite}
       PIPELINE__API__JOBS_TABLE_NAME: ${JOBS_TABLE_NAME:-traffic-vrag-jobs}
+      # Artifact store: "local" writes pipeline outputs to the ./data bind mount
+      # (default); "s3" writes them to s3://<STORAGE_S3_BUCKET>/<prefix>/...
+      # Raw uploads, clip .mp4s, the job DB and the Chroma dir stay local either
+      # way. `docker compose --profile aws up` points this at localstack S3.
+      PIPELINE__STORAGE__BACKEND: ${STORAGE_BACKEND:-local}
+      PIPELINE__STORAGE__S3_BUCKET: ${STORAGE_S3_BUCKET:-}
+      PIPELINE__STORAGE__S3_PREFIX: ${STORAGE_S3_PREFIX:-traffic-vrag}
       PIPELINE__AWS__REGION: ${AWS_REGION:-}
       PIPELINE__AWS__ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
       # boto3 reads these from the environment. Empty on the SQLite path, which
@@ -113,16 +120,24 @@ services:
       chromadb:
         condition: service_healthy
 
-  # Local stand-in for DynamoDB, started only with `--profile aws`. When on,
-  # set AWS_ENDPOINT_URL=http://localstack:4566, AWS_REGION=us-east-1 and dummy
-  # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env, plus JOBS_BACKEND=dynamodb.
+  # Local stand-in for DynamoDB + S3, started only with `--profile aws`. To use
+  # it, put this in .env and run `docker compose --profile aws up`:
+  #   AWS_ENDPOINT_URL=http://localstack:4566
+  #   AWS_REGION=us-east-1
+  #   AWS_ACCESS_KEY_ID=test
+  #   AWS_SECRET_ACCESS_KEY=test
+  #   JOBS_BACKEND=dynamodb          # optional: DynamoDB job store
+  #   STORAGE_BACKEND=s3             # optional: S3 artifact store
+  #   STORAGE_S3_BUCKET=traffic-vrag-artifacts
+  # then create the bucket once:
+  #   docker compose exec localstack awslocal s3 mb s3://traffic-vrag-artifacts
   localstack:
     image: localstack/localstack:3
     profiles: ["aws"]
     ports:
       - "4566:4566"
     environment:
-      SERVICES: dynamodb
+      SERVICES: dynamodb,s3
     volumes:
       - localstack_data:/var/lib/localstack
 
