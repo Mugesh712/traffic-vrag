@@ -201,9 +201,18 @@ class S3Storage:
             self._client.head_object(Bucket=self.bucket, Key=self._s3_key(key))
             return True
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
-                return False
-            raise
+            if exc.response.get("Error", {}).get("Code") not in ("404", "NoSuchKey", "NotFound"):
+                raise
+
+        # No object at that exact key -- but S3 has no directories, so a stage
+        # checking "does this clip's frame directory exist" is really asking
+        # "is there anything under this prefix". Path.exists() answers yes for
+        # a real directory too, so match that here instead of always saying no.
+        prefix = self._s3_key(key)
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
+        resp = self._client.list_objects_v2(Bucket=self.bucket, Prefix=prefix, MaxKeys=1)
+        return resp.get("KeyCount", 0) > 0
 
     def iter_keys(self, prefix: str) -> Iterator[str]:
         s3_prefix = self._s3_key(_normalize(prefix))

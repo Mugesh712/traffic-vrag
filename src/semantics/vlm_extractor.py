@@ -110,8 +110,16 @@ class Florence2Backend:
         self.device = device
         self.max_new_tokens = max_new_tokens
         self.num_beams = num_beams
+        # low_cpu_mem_usage loads weights straight into their final tensors
+        # instead of materialising a full extra copy of the state dict first --
+        # on a memory-tight CPU host that transient ~2x spike during load is
+        # what OOM-kills the process. (dtype left alone: Florence-2 is fp32 and
+        # several of its ops have no fp16 CPU kernel.)
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_id, trust_remote_code=True, attn_implementation="eager"
+            model_id,
+            trust_remote_code=True,
+            attn_implementation="eager",
+            low_cpu_mem_usage=True,
         ).to(device)
         self.model.eval()
         self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)

@@ -106,6 +106,17 @@ def test_write_then_read_text_round_trips(root):
     assert p.read_text() == '{"events": []}'
 
 
+def test_exists_is_true_for_a_directory_with_content(root):
+    """A stage checks "does this clip's frame directory exist" with .exists(),
+    not .is_dir() -- pathlib.Path.exists() answers yes for a populated
+    directory, and both backends must match that (S3 has no directories, only
+    keys, so this exercises the prefix-listing fallback)."""
+    d = root / "data" / "frames" / "vid" / "clip_000"
+    assert not d.exists()
+    (d / "frame_000000.jpg").write_bytes(b"\xff\xd8")
+    assert d.exists()
+
+
 def test_write_then_read_bytes_round_trips(root):
     p = root / "data" / "crops" / "clip_000" / "0.jpg"
     p.write_bytes(b"\xff\xd8\xff\x00binary")

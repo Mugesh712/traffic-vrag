@@ -70,7 +70,18 @@ def run_pipeline(job_id: str, video_path: str, settings: PipelineSettings, store
         store.set_video_id(job_id, video_id)
         store.mark_stage_completed(job_id, "ingest")
 
-        clip_ids = [clip.clip_id for clip in manifest.clips]
+        # Skip clips with no sampled frames. A short tail clip can exist with
+        # zero frames when the video length is not a multiple of the sampling
+        # interval (e.g. clip_001 holding only 2 raw frames, neither of which
+        # lands on the interval) -- the per-clip stages have nothing to do with
+        # it, and M2 raises "No frames found" if handed one. scripts/reproduce.sh
+        # already filters these the same way.
+        clip_ids = [clip.clip_id for clip in manifest.clips if clip.frames]
+        if not clip_ids:
+            raise RuntimeError(
+                "No clip has any sampled frames -- the video may be shorter than "
+                "one sampling interval, or the interval is set too large."
+            )
         for stage_name, stage_fn, needs_video_id in _PER_CLIP_STAGES:
             for i, clip_id in enumerate(clip_ids, start=1):
                 store.mark_stage_started(job_id, stage_name, detail=f"clip {i}/{len(clip_ids)}: {clip_id}")

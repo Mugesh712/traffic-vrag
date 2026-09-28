@@ -19,7 +19,12 @@ services:
       # Override in a .env file rather than editing this line; the pipeline
       # reads the same value via PIPELINE__NEO4J__PASSWORD below.
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-traffic-vrag}
-      NEO4J_server_memory_heap_max__size: 1G
+      # This graph is tiny (hundreds of nodes per video). 512M heap + a small
+      # page cache is plenty, and on an 8GB host every 100MB left for the api
+      # container matters -- Florence-2 (M5/M8) is what runs out of memory.
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP:-512m}
+      NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP:-512m}
+      NEO4J_server_memory_pagecache_size: 256m
     ports:
       - "7474:7474"   # browser
       - "7687:7687"   # bolt
@@ -79,6 +84,10 @@ services:
       PIPELINE__VLM__NUM_BEAMS: ${VLM_NUM_BEAMS:-3}
       PIPELINE__VLM__FRAMES_PER_TRACK: ${VLM_FRAMES_PER_TRACK:-8}
       PIPELINE__VLM__MAX_NEW_TOKENS: ${VLM_MAX_NEW_TOKENS:-200}
+      # Crops fed to Florence-2 at once. This is the main lever on *peak*
+      # memory during M5/M8 (weights are fixed ~1.8GB; activations scale with
+      # the batch). Drop to 1-2 in .env on a memory-tight host.
+      PIPELINE__VLM__BATCH_SIZE: ${VLM_BATCH_SIZE:-8}
       PIPELINE__CONFIRMATION__TOP_K: ${CONFIRM_TOP_K:-3}
       # The UI is reached at the host's public address, not localhost, so that
       # origin must be allowed explicitly -- the default list is dev-only, and
@@ -114,6 +123,10 @@ services:
       - ./configs:/app/configs
       # Model weights: ~1GB+ of downloads that must not repeat per rebuild.
       - model_cache:/models
+      # ChromaDB's default embedding function (M11) downloads a ~79MB
+      # all-MiniLM-L6-v2 ONNX model here on first use. Without this volume it
+      # re-downloads on every `compose up` recreate -- minutes on a slow link.
+      - chroma_onnx_cache:/root/.cache/chroma
     depends_on:
       neo4j:
         condition: service_healthy
@@ -161,4 +174,5 @@ volumes:
   neo4j_data:
   chroma_data:
   model_cache:
+  chroma_onnx_cache:
   localstack_data:

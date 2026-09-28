@@ -255,6 +255,13 @@ def link_video(video_id: str, settings: PipelineSettings | None = None) -> Maste
     # directory listing, so it follows real time.
     clip_summaries: list[list[_ClipTrackSummary]] = []
     for clip in manifest.clips:
+        # A clip with no sampled frames was never processed this run. Its
+        # per-clip output files are keyed by clip_id alone, so any that exist
+        # on disk belong to a DIFFERENT video that happened to have a clip of
+        # the same name -- reading them here resolved frame ids against this
+        # video's (empty) frame index and raised KeyError. Skip it.
+        if not clip.frames:
+            continue
         tracks_path = outputs_dir / "tracks_associated" / f"{clip.clip_id}.json"
         if not tracks_path.exists():
             logger.warning("link_video: no associated tracks for %s, skipping clip", clip.clip_id)
