@@ -10,6 +10,12 @@
 @import "@fontsource/ibm-plex-sans/500.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
+/* Landing screen only: the requested home-screen design is set in Inter
+   (matched against the reference by glyph width and height). */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 
 @theme {
   /* Surfaces: a monitor wall in an unlit room is a blue-grey haze, not black.
@@ -62,6 +68,52 @@ body {
 /* Data columns must align: ids and timestamps are read down a column. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* LANDING HIT-AREAS. The landing's controls are drawn into its background
+   artboard; these transparent layers sit exactly over them and supply the
+   behaviour -- hover, press, focus, drag -- without redrawing the control. */
+.hit,
+.hit-soft,
+.hit-bright {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    box-shadow 180ms ease;
+}
+.hit:hover {
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(122, 150, 220, 0.22);
+}
+.hit:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+.hit[aria-current="page"] {
+  cursor: default;
+}
+.hit[aria-current="page"]:hover {
+  background: transparent;
+  box-shadow: none;
+}
+.hit-soft:hover {
+  background: rgba(139, 108, 246, 0.04);
+}
+.hit-soft.is-dragging {
+  background: rgba(139, 108, 246, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(139, 108, 246, 0.7);
+}
+.hit-bright:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px -10px rgba(140, 100, 245, 0.8);
+}
+.hit-bright:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+.hit-bright:disabled {
+  cursor: progress;
 }
 
 ::selection {

@@ -39,9 +39,23 @@ function App() {
 
   const running = status?.status === "running" || status?.status === "queued";
 
+  if (!jobId) {
+    return (
+      <div className="min-h-screen bg-[#0a0e17]">
+        <UploadPanel onUploaded={setJobId} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-well">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-hairline px-4 py-2.5 sm:px-5">
+        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-sm border border-hairline-lit bg-console text-sodium" aria-hidden>
+          <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+            <rect x="1.5" y="4" width="8.5" height="7" rx="1" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M10 6.6 13.5 4.8v5.4L10 8.4" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+          </svg>
+        </span>
         <span className="font-display text-lg font-600 uppercase tracking-[0.16em] text-ink">
           Traffic<span className="text-sodium">·</span>VRAG
         </span>
@@ -49,39 +63,32 @@ function App() {
           video reasoning
         </span>
 
-        {jobId && (
-          <>
-            <span className="ml-auto flex items-center gap-1.5 font-mono text-[11px] text-ink-3">
-              <span
-                aria-hidden
-                className={`inline-block h-1.5 w-1.5 rounded-full ${
-                  status?.status === "failed"
-                    ? "bg-flag"
-                    : running
-                      ? "animate-pulse bg-annotate"
-                      : "bg-sodium"
-                }`}
-              />
-              {status?.status ?? "connecting"}
-            </span>
-            <span className="font-mono text-[11px] tabular text-ink-3">{jobId.slice(0, 8)}</span>
-            <button
-              onClick={() => {
-                setJobId(null);
-                setSelectedObject(null);
-              }}
-              className="interactive font-mono text-[11px] uppercase tracking-wider text-ink-3 hover:text-annotate"
-            >
-              new
-            </button>
-          </>
-        )}
+        <span className="ml-auto flex items-center gap-1.5 font-mono text-[11px] text-ink-3">
+          <span
+            aria-hidden
+            className={`inline-block h-1.5 w-1.5 rounded-full ${
+              status?.status === "failed"
+                ? "bg-flag"
+                : running
+                  ? "animate-pulse bg-annotate"
+                  : "bg-sodium"
+            }`}
+          />
+          {status?.status ?? "connecting"}
+        </span>
+        <span className="font-mono text-[11px] tabular text-ink-3">{jobId.slice(0, 8)}</span>
+        <button
+          onClick={() => {
+            setJobId(null);
+            setSelectedObject(null);
+          }}
+          className="interactive font-mono text-[11px] uppercase tracking-wider text-ink-3 hover:text-annotate"
+        >
+          new
+        </button>
       </header>
 
-      {!jobId ? (
-        <UploadPanel onUploaded={setJobId} />
-      ) : (
-        <div className="mx-auto flex max-w-[1400px] flex-col gap-5 px-4 py-5 lg:flex-row sm:px-5">
+      <div className="mx-auto flex max-w-[1400px] flex-col gap-5 px-4 py-5 lg:flex-row sm:px-5">
           <aside className="w-full flex-none lg:w-[230px]">
             <div className="lg:sticky lg:top-5">
               {status ? (
@@ -127,7 +134,6 @@ function App() {
             )}
           </main>
         </div>
-      )}
     </div>
   );
 }
